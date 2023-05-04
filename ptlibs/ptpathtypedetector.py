@@ -1,6 +1,6 @@
 import os
 
-class PathTypeDetector:
+class PtPathTypeDetector:
     DOCUMENT_EXTENSIONS = [
         # Text files
         '.txt',
@@ -95,24 +95,18 @@ class PathTypeDetector:
         '.snap', '.versions', '.recycle', '.recycler', '.recycled', '.trash', '.deleted',
     ]
 
-
-    def __init__(self, path: str):
-        """Create object for URL path type determination
+    def get_type(self, path) -> str:
+        """Determine the path type based on the extension name.
 
         Args:
             path (str): path to be determined
-        """
-        # Get the file extension using the splitext function
-        self.path = path
-        self.resource_name, self.extension = os.path.splitext(path)
-
-
-    def get_type(self) -> str:
-        """Determine the path type based on the extension name.
 
         Returns:
             A string representing the file type.
         """
+
+        self.path = path
+        self.resource_name, self.extension = os.path.splitext(path)
 
         if self.is_directory():
             return "directory"
@@ -133,7 +127,7 @@ class PathTypeDetector:
         elif self.is_xml():
             return 'xml'
         else:
-            return None
+            return "other"
 
 
     def is_directory(self):

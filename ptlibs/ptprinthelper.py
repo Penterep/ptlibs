@@ -1,6 +1,7 @@
 from . import ptdefs
 import re
 import struct
+import os
 try:
     import fcntl, termios
 except:
@@ -65,7 +66,8 @@ def ptprint(string: str, bullet_type="TEXT", condition=None, end="\n", flush=Fal
         if newline_above:
             string = "\n" + string
         if clear_to_eol:
-            string = string + (' ' * (terminal_width() - len_string_without_colors(string)))
+            if os.name == "posix":
+                string = string + (' ' * (terminal_width() - len_string_without_colors(string)))
         print(string, end=end, flush=flush)
         if filehandle:
             string = re.sub("\033\[\d+m", "", string)
@@ -126,7 +128,7 @@ def bullet(bullet_type=None) -> str:
 
 
 def ptprint_(string: str, end="\n", flush=False, clear_to_eol=False, filehandle=False) -> None:
-    """Legacy solution."""
+    """Legacy solution"""
     if string:
         if clear_to_eol:
             string = string + (' ' * (terminal_width() - len_string_without_colors(string)))
@@ -178,4 +180,5 @@ def clear_line_ifnot(end="\n", condition=False) -> None:
 
 
 def clear_line(end="\n") -> None:
+    if os.name == "posix":
         print(' '*terminal_width(), end=end)

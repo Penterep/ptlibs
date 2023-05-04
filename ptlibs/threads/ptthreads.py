@@ -45,6 +45,6 @@ class PtThreads:
     def wrapper_worker(self, item: any, function: Callable[[any], any], thread_no: int):
         try:
             self.arraylock.lock_array_append(self.returns, function(item))
-        except:
+        except Exception as e:
             pass
         self.arraylock.lock_array_append(self.free_threads, thread_no)

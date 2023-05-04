@@ -1,5 +1,3 @@
-![penterepTools](https://www.penterep.com/external/penterepToolsLogo.png)
-
 # PTLIBS
 > Support library for penterepTools
 
@@ -10,6 +8,10 @@ pip install ptlibs
 
 ## Version History
 ```
+- 0.1.3
+    - ptpathtypedetector - get_type() method tweaks
+    - arraylock - new ThreadSafeArray class
+    - added windows support (for tools that do not use functions that depend on fcntl, termios libraries)
 - 0.1.2
     - Unification with type hints changes
 - 0.1.1

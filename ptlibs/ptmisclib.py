@@ -32,7 +32,7 @@ def pairs(pair):
     if len(pair.split(":")) == 2:
         return pair
     else:
-         raise ValueError('Not a pair')
+        raise ValueError('Not a pair')
 
 
 def get_wordlist(file_handler, begin_with=""):
@@ -85,8 +85,8 @@ def get_file_modification_age(filename: str) -> datetime.timedelta:
     return (datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(tempfile.gettempdir(), "pentereptools", filename))))
 
 
-def get_temp_filename_from_url(url: str, method: str) -> str:
-    input_bytes = (url + method).encode()
+def get_temp_filename_from_url(url: str, method: str, headers: dict) -> str:
+    input_bytes = (url + method + str(headers)).encode()
     return sha256(input_bytes).hexdigest()
 
 
@@ -105,47 +105,53 @@ def get_response_data_dump(response: requests.models.Response) -> dict:
         res = re.sub("^res:", "", ''.join(re.search(r"(res:(.|\n)*)", response_dump, re.MULTILINE).groups()), flags=re.MULTILINE)[:-1]
         return {"request": req, "response": res}
     except Exception as e:
-        print("type of error:", e)
         return {"request": "error", "response": "error"}
 
 
-def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dict, allow_redirects: bool, verify: bool , timeout: int, dump_response: bool = False) -> requests.Response:
-    """Gets http response from url. If the response is already saved in a temp file, it will be loaded from there.
-       If response is not present, it will be requested from URL and saved to temp folder.
+def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False):
+    try:
+        response = requests.request(method, url, proxies=proxies, allow_redirects=redirects, headers=headers, verify=verify, timeout=timeout)
+    except requests.exceptions.RequestException as error:
+        raise error
+    return response
+
+
+def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False) -> requests.Response:
+    """Returns HTTP response from URL.
+       If param <cache_request> is present, response will be saved into a temp file. If response is already saved in a temp file, it will be loaded from there.
 
     Args:
-        url           (str)  : request url
-        method        (str)  : request method
-        proxies       (dict) : request proxies
-        headers       (dict) : request headers
-        verify        (bool) : verify requests
-        dump_response (bool) : if truthy, this function returns a tuple containing [ response, response_dump ]
+        url            (str)  : request url
+        method         (str)  : request method
+        headers        (dict) : request headers
+        proxies        (dict) : request proxies
+        data           (dict) : request post data
+        timeout        (int)  : request timeout
+        redirects      (bool) : follow redirects
+        verify         (bool) : verify requests
+        cache          (bool) : cache request-response
+        dump_response  (bool) : dump request-response
 
     Returns:
-        Default:
+        default:
             requests.models.Response: response
-        With dump_response:
-            tuple: [ response: requests.models.Response, {request_dump: str, response_dump: str} ]
+        with dump_response:
+            tuple: ( response: requests.Response, request_dump: dict )
     """
+    if cache:
+        # Create penterep dir in tmp if not present
+        if not os.path.exists(os.path.join(tempfile.gettempdir(), "pentereptools")):
+            os.makedirs(os.path.join(tempfile.gettempdir(), "pentereptools"))
 
-    # Create penterep dir in tmp if not present
-    if not os.path.exists(os.path.join(tempfile.gettempdir(), "pentereptools")):
-        os.makedirs(os.path.join(tempfile.gettempdir(), "pentereptools"))
-
-    filename = get_temp_filename_from_url(url, method)
-    if exists_temp(filename):
-        pickled_object = load_object(filename)
-        if dump_response:
-            return (pickled_object["response"], pickled_object["response_dump"])
-        return pickled_object["response"]
+        filename = get_temp_filename_from_url(url, method, headers)
+        if exists_temp(filename):
+            obj = load_object(filename)
+            return obj["response"] if not dump_response else (obj["response"], obj["response_dump"])
+        else:
+            response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify)
+            response_dump = get_response_data_dump(response)
+            save_object({"response": response, "response_dump": response_dump}, filename)
+            return response if not dump_response else (response, response_dump)
     else:
-        try:
-            response = requests.request(method, url, proxies=proxies, allow_redirects=allow_redirects, headers=headers, verify=verify, timeout=timeout)
-        except requests.exceptions.RequestException as error:
-            raise error
-        response_dump = get_response_data_dump(response)
-        pickle_object = {"response": response, "response_dump": response_dump}
-        save_object(pickle_object, filename)
-        if dump_response:
-            return (response, response_dump)
-        return response
+        response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify)
+        return response if not dump_response else (response, get_response_data_dump(response))

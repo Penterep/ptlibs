@@ -9,14 +9,13 @@ setuptools.setup(
     author="Penterep",
     author_email="info@penterep.com",
     url="https://www.penterep.com/",
-    version="0.1.2",
+    version="0.1.3",
     license="GPLv3+",
     packages=setuptools.find_packages(),
     classifiers=[
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: Implementation :: CPython",
         "Topic :: Software Development :: Libraries :: Python Modules",
-        "Topic :: Security",
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"
     ],
     python_requires = '>=3.6',

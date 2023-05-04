@@ -4,7 +4,6 @@ from ptlibs import ptmisclib
 
 
 class PrintLock:
-    """Printlock is an object that holds an output string for a thread that instantiates this object"""
     def __init__(self) -> None:
         self.output_string = ""
         self.lock = threading.Lock()

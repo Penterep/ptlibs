@@ -1,6 +1,7 @@
 import json
 import sys
 import uuid
+import urllib
 
 from ptlibs.ptprinthelper import out_if, out_ifnot, ptprint
 from ptlibs.pathtypedetector import PathTypeDetector
