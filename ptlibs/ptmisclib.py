@@ -108,15 +108,15 @@ def get_response_data_dump(response: requests.models.Response) -> dict:
         return {"request": "error", "response": "error"}
 
 
-def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False):
+def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None) -> requests.Response:
     try:
-        response = requests.request(method, url, proxies=proxies, allow_redirects=redirects, headers=headers, verify=verify, timeout=timeout)
+        response = requests.request(method, url, proxies=proxies, allow_redirects=redirects, headers=headers, verify=verify, timeout=timeout, data=data, auth=auth)
     except requests.exceptions.RequestException as error:
         raise error
     return response
 
 
-def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False) -> requests.Response:
+def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None) -> requests.Response:
     """Returns HTTP response from URL.
        If param <cache_request> is present, response will be saved into a temp file. If response is already saved in a temp file, it will be loaded from there.
 
@@ -131,6 +131,7 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dic
         verify         (bool) : verify requests
         cache          (bool) : cache request-response
         dump_response  (bool) : dump request-response
+        auth           (tuple[str, str]) : use HTTP authentication
 
     Returns:
         default:
@@ -148,10 +149,10 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dic
             obj = load_object(filename)
             return obj["response"] if not dump_response else (obj["response"], obj["response_dump"])
         else:
-            response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify)
+            response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
             response_dump = get_response_data_dump(response)
             save_object({"response": response, "response_dump": response_dump}, filename)
             return response if not dump_response else (response, response_dump)
     else:
-        response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify)
+        response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
         return response if not dump_response else (response, get_response_data_dump(response))

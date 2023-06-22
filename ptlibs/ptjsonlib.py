@@ -4,7 +4,7 @@ import uuid
 import urllib
 
 from ptlibs.ptprinthelper import out_if, out_ifnot, ptprint
-from ptlibs.pathtypedetector import PathTypeDetector
+from ptlibs.ptpathtypedetector import PtPathTypeDetector
 
 
 class PtJsonLib:
@@ -43,7 +43,7 @@ class PtJsonLib:
         for i, path in enumerate(paths):
             name = path
             url = f"{base_url}/{'/'.join(paths[0:i+1])}"
-            page_type = PathTypeDetector(path).get_type()
+            page_type = PtPathTypeDetector(path).get_type()
             parent_type = "rootDirectory" if i == 0 else None
             properties = {"name": name, "url": url, "WebPageType": page_type}
             node_object = self.create_node_object("webPage", parent_type, parent, properties)
