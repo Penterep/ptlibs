@@ -119,7 +119,7 @@ def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dic
 
 
 def _get_cookies_from_headers(headers: dict) -> dict | None:
-    if not headers["Cookie"]:
+    if "Cookie" not in headers:
         return None
     
     cookies_object = SimpleCookie()
