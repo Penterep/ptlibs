@@ -1,5 +1,6 @@
 from hashlib import sha256
 import datetime
+from http.cookies import SimpleCookie
 import os
 import pickle
 import signal
@@ -110,10 +111,21 @@ def get_response_data_dump(response: requests.models.Response) -> dict:
 
 def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None) -> requests.Response:
     try:
-        response = requests.request(method, url, proxies=proxies, allow_redirects=redirects, headers=headers, verify=verify, timeout=timeout, data=data, auth=auth)
+        cookies = _get_cookies_from_headers(headers)
+        response = requests.request(method, url, proxies=proxies, allow_redirects=redirects, headers=headers, verify=verify, timeout=timeout, data=data, auth=auth, cookies=cookies)
     except requests.exceptions.RequestException as error:
         raise error
     return response
+
+
+def _get_cookies_from_headers(headers: dict) -> dict | None:
+    if not headers["Cookie"]:
+        return None
+    
+    cookies_object = SimpleCookie()
+    cookies_object.load(headers["Cookie"])
+    cookies = {key: morsel.value for key, morsel in cookies_object.items()}
+    return cookies
 
 
 def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None) -> requests.Response:
