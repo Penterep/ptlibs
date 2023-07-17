@@ -1,3 +1,6 @@
+[![penterepTools](https://www.penterep.com/external/penterepToolsLogo.png)](https://www.penterep.com/)
+
+
 # PTLIBS
 > Support library for penterepTools
 
@@ -8,6 +11,8 @@ pip install ptlibs
 
 ## Version History
 ```
+- 1.0.0
+    - Cookie redirect fix
 - 0.1.3
     - ptpathtypedetector - get_type() method tweaks
     - arraylock - new ThreadSafeArray class
