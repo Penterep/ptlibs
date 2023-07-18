@@ -19,7 +19,7 @@ setuptools.setup(
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"
     ],
     python_requires = '>=3.6',
-    install_requires=["requests"],
+    install_requires=["requests", "requests-toolbelt"],
     long_description=long_description,
     long_description_content_type="text/markdown"
 )
