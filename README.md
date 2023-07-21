@@ -11,6 +11,8 @@ pip install ptlibs
 
 ## Version History
 ```
+- 1.0.1
+    - added missing requests-toolbelt dependency
 - 1.0.0
     - Cookie redirect fix
 - 0.1.3
