@@ -102,6 +102,9 @@ class PtJsonLib:
         if message:
             self.json_object["message"] = message
 
+    def set_message(self, message: str) -> None:
+        self.json_object["message"] = message
+
     def get_result_json(self) -> str:
         return json.dumps(self.json_object, indent=4)
 
