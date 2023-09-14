@@ -18,9 +18,7 @@ class ArrayLock:
 
 
 T = TypeVar('T')
-
 class ThreadSafeArray(list[T], Generic[T]):
-
     def __init__(self, value: list[T] = None) -> None:
         self._unsafe_array = super()
         if value is not None:

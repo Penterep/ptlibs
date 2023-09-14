@@ -1,17 +1,19 @@
 import threading
 import time
-from typing import Union, Callable
+import traceback
 
+from typing import Union, Callable
 from ptlibs.threads import arraylock
 
 
 class PtThreads:
-    def __init__(self):
+    def __init__(self, print_errors: bool = False):
         self.threads_list = []
         self.free_threads = []
         self.returns      = []
         self.lock         = threading.Lock()
         self.arraylock    = arraylock.ArrayLock()
+        self.print_errors = print_errors
 
     def threads(self, items: Union[list,any], function: Callable[[any], any], threads: int):
         self.free_threads.clear()
@@ -46,5 +48,8 @@ class PtThreads:
         try:
             self.arraylock.lock_array_append(self.returns, function(item))
         except Exception as e:
-            pass
+            if self.print_errors:
+                print(f"An exception in thread {thread_no} occurred: {e}")
+                traceback.print_tb(e.__traceback__)
+
         self.arraylock.lock_array_append(self.free_threads, thread_no)
