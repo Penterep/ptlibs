@@ -11,6 +11,10 @@ pip install ptlibs
 
 ## Version History
 ```
+- 1.0.2
+    - added ptthreads exception printing
+    - added ptprint docker support
+    - added ptprinthelper terminal size windows fix
 - 1.0.1
     - added missing requests-toolbelt dependency
 - 1.0.0
