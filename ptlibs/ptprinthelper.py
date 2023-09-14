@@ -1,11 +1,7 @@
 from . import ptdefs
 import re
-import struct
 import os
-try:
-    import fcntl, termios
-except:
-    pass
+import shutil
 
 
 def print_banner(scriptname, version, condition=None, space=1) -> None:
@@ -155,10 +151,8 @@ def terminal_height() -> int:
 
 
 def terminal_size() -> tuple[int, int]:
-    th, tw, hp, wp = struct.unpack('HHHH',
-        fcntl.ioctl(0, termios.TIOCGWINSZ,
-        struct.pack('HHHH', 0, 0, 0, 0)))
-    return tw, th
+    terminal_size = shutil.get_terminal_size()
+    return terminal_size.columns, terminal_size.lines
 
 
 strip_ANSI_escape_sequences_sub = re.compile(r"""
