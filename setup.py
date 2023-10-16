@@ -9,7 +9,7 @@ setuptools.setup(
     author="Penterep",
     author_email="info@penterep.com",
     url="https://www.penterep.com/",
-    version="1.0.2",
+    version="1.0.3",
     license="GPLv3+",
     packages=setuptools.find_packages(),
     classifiers=[
