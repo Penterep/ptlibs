@@ -9,13 +9,14 @@ from ptlibs.ptpathtypedetector import PtPathTypeDetector
 
 class PtJsonLib:
     def __init__(self, guid="", status="") -> None:
+        self.PtPathTypeDetector = PtPathTypeDetector()
         self.json_object = {
             "guid": guid,
             "status": status,
             "message": "",
             "result": {
                 "nodes": [],
-                "properties": [],
+                "properties": {},
                 "vulnerabilities": []
             }
         }
@@ -40,15 +41,14 @@ class PtJsonLib:
         nodes = []
         parent = None
         paths = self.get_paths(url)
-        for i, path in enumerate(paths):
-            name = path
-            url = f"{base_url}/{'/'.join(paths[0:i+1])}"
-            page_type = PtPathTypeDetector(path).get_type()
-            parent_type = "rootDirectory" if i == 0 else None
-            properties = {"name": name, "url": url, "WebPageType": page_type}
+        for index, path in enumerate(paths):
+            url = f"{base_url}/{'/'.join(paths[0:index+1])}"
+            page_type = self.PtPathTypeDetector.get_type(path)
+            parent_type = "rootDirectory" if index == 0 else None
+            properties = {"name": path, "url": url, "WebPageType": page_type}
             node_object = self.create_node_object("webPage", parent_type, parent, properties)
             if type(node_object) is not str: #check whether node already exists
-                parent = node_object["ident"]
+                parent = node_object["key"]
                 nodes.append(node_object)
             else:
                 parent = node_object
@@ -65,7 +65,7 @@ class PtJsonLib:
 
     def get_paths(self, url: str) -> list[str]:
         """Returns paths from url"""
-        return url.strip("/").split("/")[1:]
+        return url.strip("/").split("/")[2:][1:]
 
     def create_node_object(self, node_type: str, parent_type=None, parent=None, properties : dict = {}) -> dict:
         """Creates node object"""
@@ -73,7 +73,7 @@ class PtJsonLib:
         ident = self.node_duplicity_check(parent_type, properties)
         if ident:
             return ident
-        return {"type": node_type, "parent_type": parent_type, "ident": self.create_guid(), "parent": parent, "properties": properties}
+        return {"type": node_type, "key": self.create_guid(), "parent": parent, "parent_type": parent_type, "properties": properties, "vulnerabilities": [] }
 
     def node_duplicity_check(self, parent_type, properties: dict) -> str | None:
         """Returns node ident if node already exists in json_object else returns None"""
@@ -82,7 +82,7 @@ class PtJsonLib:
         for node in self.json_object["result"]["nodes"]:
             if node["parent_type"] == parent_type:
                 if node["properties"] == properties:
-                    return node["ident"]
+                    return node["key"]
         return None
 
     def create_guid(self) -> str:
