@@ -95,6 +95,9 @@ class PtPathTypeDetector:
         '.snap', '.versions', '.recycle', '.recycler', '.recycled', '.trash', '.deleted',
     ]
 
+    JAVASCRIPT_EXTENSIONS = [".js"]
+    CSS_EXTENSIONS = [".css"]
+
     def get_type(self, path) -> str:
         """Determine the path type based on the extension name.
 
@@ -126,6 +129,10 @@ class PtPathTypeDetector:
             return 'json'
         elif self.is_xml():
             return 'xml'
+        elif self.is_javascript():
+            return 'javascript'
+        elif self.is_css():
+            return 'css'
         else:
             return "other"
 
@@ -163,6 +170,16 @@ class PtPathTypeDetector:
     def is_xml(self):
         """Determine if the path is an XML file."""
         return self.extension in self.XML_EXTENSIONS
+
+
+    def is_css(self):
+        """Determine if the path is a css file."""
+        return self.extension in self.CSS_EXTENSIONS
+
+
+    def is_javascript(self):
+        """Determine if the path is a javascript file."""
+        return self.extension in self.JAVASCRIPT_EXTENSIONS
 
 
     def is_robots_file(self):
