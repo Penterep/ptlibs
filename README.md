@@ -11,6 +11,8 @@ pip install ptlibs
 
 ## Version History
 ```
+- 1.0.3
+    - Updated ptjsonlibs, pathtypedetector
 - 1.0.2
     - added ptthreads exception printing
     - added ptprint docker support
