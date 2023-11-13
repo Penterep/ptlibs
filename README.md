@@ -11,6 +11,8 @@ pip install ptlibs
 
 ## Version History
 ```
+- 1.0.4
+    - JSON changes
 - 1.0.3
     - Updated ptjsonlibs, pathtypedetector
 - 1.0.2
