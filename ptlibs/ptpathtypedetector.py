@@ -95,6 +95,10 @@ class PtPathTypeDetector:
         '.snap', '.versions', '.recycle', '.recycler', '.recycled', '.trash', '.deleted',
     ]
 
+    PAGE_EXTENSIONS = [
+        ".html", ".htm", ".shtml", ".xhtml", ".php", ".asp", ".aspx", ".jsp"
+    ]
+
     JAVASCRIPT_EXTENSIONS = [".js"]
     CSS_EXTENSIONS = [".css"]
 
@@ -112,35 +116,40 @@ class PtPathTypeDetector:
         self.resource_name, self.extension = os.path.splitext(path)
 
         if self.is_directory():
-            return "directory"
+            return "webSourceTypeDirectory"
         elif self.is_robots_file():
-            return "robots.txt"
+            return "webSourceTypeRobotsTxt"
         elif self.is_sitemap():
-            return "sitemap"
+            return "webSourceTypeSitemap"
         elif self.is_document():
-            return 'document'
+            return 'webSourceTypeDocument'
         elif self.is_image():
-            return 'image'
+            return 'webSourceTypeImage'
         elif self.is_config():
-            return 'config'
+            return 'webSourceTypeConfig'
         elif self.is_backup():
-            return 'backup'
+            return 'webSourceTypeBackup'
         elif self.is_json():
-            return 'json'
+            return 'webSourceTypeJson'
         elif self.is_xml():
-            return 'xml'
+            return 'webSourceTypeXml'
         elif self.is_javascript():
-            return 'javascript'
+            return 'webSourceTypeJavascript'
         elif self.is_css():
-            return 'css'
+            return 'webSourceTypeCss'
+        elif self.is_webpage():
+            return "webSourceTypePage"
         else:
-            return "other"
+            return "webSourceTypeOther"
 
 
     def is_directory(self):
         """Determine if the path is a directory."""
         return self.extension == ""
 
+    def is_webpage(self):
+        """Determine if the path is an webpage"""
+        return self.extension in self.PAGE_EXTENSIONS
 
     def is_document(self):
         """Determine if the path is a document."""
