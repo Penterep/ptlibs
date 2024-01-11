@@ -11,6 +11,9 @@ pip install ptlibs
 
 ## Version History
 ```
+- 1.0.5
+    - Added tldparser module
+    - ptjsonlib - updated add_property function
 - 1.0.4
     - JSON changes
 - 1.0.3
