@@ -6,7 +6,7 @@ import os
 from ptlibs import ptnethelper
 from urllib.parse import urlparse
 
-def parse(url: str) -> object:
+def parse_url(url: str) -> object:
     """Parse provided <url>"""
 
     parsed_url = urlparse(url)
@@ -41,12 +41,6 @@ def parse(url: str) -> object:
         "suffix": suffix,
         "port": port,
     }
-
-
-def is_domain(url) -> str:
-    """Check whether provided <url> is a domain"""
-    if "." in url:
-        return True
 
 
 def get_tld(url) -> str:
