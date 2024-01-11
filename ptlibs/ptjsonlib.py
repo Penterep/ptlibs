@@ -90,7 +90,7 @@ class PtJsonLib:
         return str(uuid.uuid4())
 
     def add_property(self, name: str, value: str) -> None:
-        self.json_object["result"]["properties"].append({"name": name, "value": value})
+        self.json_object["result"]["properties"].update({name: value})
 
     def add_vulnerability(self, code: str, request: str=None, response: str=None, description: str=None, score: str=None, note: str=None) -> None:
         vuln_dict = {k:v for k, v in locals().items() if v is not None}
