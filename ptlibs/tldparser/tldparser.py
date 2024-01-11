@@ -10,29 +10,20 @@ def parse_url(url: str) -> object:
     """Parse provided <url>"""
 
     parsed_url = urlparse(url)
-
     if not all([parsed_url.netloc, parsed_url.scheme]):
         raise ValueError("Not a valid URL")
 
-    domain = None
-    subdomains = None
     scheme = parsed_url.scheme
     port = parsed_url.port
-    if port:
-        _netloc = parsed_url.netloc.split(":"+str(port))[0]
-    else:
-        _netloc = parsed_url.netloc
-
-    suffix = get_tld(_netloc)
-
-    if suffix:
-        _netloc = ''.join(_netloc.split("." + suffix))
-
-    if not ptnethelper.is_valid_ip_address(_netloc):
-        subdomains = '.'.join(_netloc.split(".")[:-1])
-        domain = ''.join(_netloc.split(".")[-1])
-    else:
-        domain = _netloc
+    netloc = parsed_url.netloc.split(":"+str(port))[0] if port else parsed_url.netloc
+    suffix = get_tld(netloc)
+    netloc = ''.join(_netloc.split("." + suffix)) if suffix else netloc
+    subdomains = None
+    domain = netloc
+    
+    if not ptnethelper.is_valid_ip_address(netloc):
+        subdomains = '.'.join(netloc.split(".")[:-1])
+        domain = ''.join(netloc.split(".")[-1])
 
     return {
         "scheme": scheme,
