@@ -6,38 +6,52 @@ import os
 from ptlibs import ptnethelper
 from urllib.parse import urlparse
 
-def parse_url(url: str) -> object:
-    """Parse <url>"""
+class ParsedResult:
+    def __init__(self, kwargs):
+        self.__dict__.update(kwargs)
+
+    def __getitem__(self, key):
+        return getattr(self, key, None)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __repr__(self):
+        return repr(self.__dict__)
+
+
+def parse_url(url: str) -> ParsedResult:
+    """Parse provided <url>"""
 
     parsed_url = urlparse(url)
     if not all([parsed_url.netloc, parsed_url.scheme]):
         raise ValueError("Not a valid URL")
 
-    scheme = parsed_url.scheme
-    port = parsed_url.port
+    scheme = parsed_url.scheme if parsed_url.scheme else ""
+    port   = parsed_url.port
     netloc = parsed_url.netloc.split(":"+str(port))[0] if port else parsed_url.netloc
     suffix = get_tld(netloc)
     netloc = ''.join(netloc.split("." + suffix)) if suffix else netloc
-    subdomains = None
     domain = netloc
+    subdomains = ""
 
     if not ptnethelper.is_valid_ip_address(netloc):
         subdomains = '.'.join(netloc.split(".")[:-1])
         domain = ''.join(netloc.split(".")[-1])
 
-    return {
+    return ParsedResult({
         "scheme": scheme,
         "subdomain": subdomains,
         "domain": domain,
         "suffix": suffix,
         "port": port,
-    }
+    })
 
 
 def get_tld(url) -> str:
     """Retrieve TLD from <url>"""
     result = sorted([w for w in _get_public_suffix_list() if url.endswith(w)])
-    return result[0][1:] if result else None
+    return result[0][1:] if result else ""
 
 
 def get_scheme(url) -> str | None:
