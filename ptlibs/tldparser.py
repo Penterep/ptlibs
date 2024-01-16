@@ -4,7 +4,7 @@ import re
 import os
 
 from ptlibs import ptnethelper
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse, ParseResult
 
 class ParsedResult:
     def __init__(self, kwargs):
@@ -23,9 +23,12 @@ class ParsedResult:
 def parse_url(url: str) -> ParsedResult:
     """Parse provided <url>"""
 
-    parsed_url = urlparse(url)
-    if not all([parsed_url.netloc, parsed_url.scheme]):
-        raise ValueError("Not a valid URL")
+    if is_domain(url):
+        parsed_url = _move_path_to_netloc(url)
+    elif is_url(url):
+        parsed_url = urlparse(url)
+    else:
+        raise ValueError("Provided <url> is neither a valid url nor domain")
 
     scheme = parsed_url.scheme if parsed_url.scheme else ""
     port   = parsed_url.port
@@ -47,6 +50,24 @@ def parse_url(url: str) -> ParsedResult:
         "port": port,
     })
 
+def _move_path_to_netloc(url) -> ParseResult:
+    """If <url> lacks a scheme, the urllib.urlparse() function incorrectly sets the netloc to the path. This function fixes this issue."""
+    parsed_url = urlparse(url)
+
+    return ParseResult(
+        scheme=parsed_url.scheme,
+        netloc=parsed_url.path.split("/", 1)[0],
+        path=parsed_url.path.split("/", 1)[1] if len(parsed_url.path.split("/", 1)) > 1 else "",
+        params=parsed_url.params,
+        query=parsed_url.query,
+        fragment=parsed_url.fragment
+    )
+
+def is_domain(string: str) -> bool:
+    return True if not all([urlparse(string).netloc, urlparse(string).scheme]) and urlparse(string).path and "." in string else False
+
+def is_url(string: str) -> bool:
+    return True if all([urlparse(string).netloc, urlparse(string).scheme]) else False
 
 def get_tld(url) -> str:
     """Retrieve TLD from <url>"""
