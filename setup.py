@@ -1,5 +1,7 @@
 import setuptools
 
+from ptlibs import __version__
+
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
@@ -9,7 +11,7 @@ setuptools.setup(
     author="Penterep",
     author_email="info@penterep.com",
     url="https://www.penterep.com/",
-    version="1.0.5",
+    version=__version__,
     license="GPLv3+",
     packages=setuptools.find_packages(),
     classifiers=[
@@ -18,6 +20,7 @@ setuptools.setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"
     ],
+    entry_points = {'console_scripts': ['ptlibs = ptlibs.cli:main']},
     python_requires = '>=3.6',
     install_requires=["requests", "requests-toolbelt"],
     long_description=long_description,
