@@ -76,9 +76,8 @@ def get_colored_text(string: str, color: str) -> str:
 
 
 
-def out_if(string="", bullet_type="TEXT", condition=True, colortext=False) -> str or None:
+def out_if(string="", bullet_type="TEXT", condition=True, colortext=False) -> str:
     if condition:
-        #bullet = bullet(bullet_type)
         if colortext:
             return f"{bullet(bullet_type)}{ptdefs.colors[bullet_type]}{string}{ptdefs.colors['TEXT']}"
         else:
