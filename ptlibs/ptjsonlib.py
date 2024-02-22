@@ -45,7 +45,7 @@ class PtJsonLib:
             url = f"{base_url}/{'/'.join(paths[0:index+1])}"
             page_type = self.PtPathTypeDetector.get_type(path)
             parent_type = "webRootDirectory" if index == 0 else None
-            properties = {"name": path, "url": url, "webSourceType": page_type}
+            properties = {"name": path, "url": url, "webPageType": page_type}
             node_object = self.create_node_object("webSource", parent_type, parent, properties)
             if type(node_object) is not str: #check whether node already exists
                 parent = node_object["key"]
