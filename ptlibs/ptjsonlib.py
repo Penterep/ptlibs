@@ -1,20 +1,20 @@
 import json
 import sys
 import uuid
-import urllib
 
 from ptlibs.ptprinthelper import out_if, out_ifnot, ptprint
 from ptlibs.ptpathtypedetector import PtPathTypeDetector
 
 
 class PtJsonLib:
-    def __init__(self, guid="", status="") -> None:
+    def __init__(self, guid: str = "", status: str = "", satid: str = "") -> None:
         self.PtPathTypeDetector = PtPathTypeDetector()
         self.json_object = {
+            "satid": satid,
             "guid": guid,
             "status": status,
             "message": "",
-            "result": {
+            "results": {
                 "nodes": [],
                 "properties": {},
                 "vulnerabilities": []
@@ -27,7 +27,7 @@ class PtJsonLib:
     def add_node(self, node_object: dict) -> None:
         """Adds node to json_object"""
         assert type(node_object) is dict
-        self.json_object["result"]["nodes"].append(node_object)
+        self.json_object["results"]["nodes"].append(node_object)
 
     def add_nodes(self, nodes: list) -> None:
         """Adds nodes to json_object"""
@@ -35,10 +35,9 @@ class PtJsonLib:
         for node in nodes:
             self.add_node(node)
 
-    def parse_url2nodes(self, url: str) -> list[dict]:
+    def parse_url2nodes(self, url: str, nodes: list = []) -> list[dict]:
         """Parses url to node object"""
         base_url = self.get_base_url(url)
-        nodes = []
         parent = None
         paths = self.get_paths(url)
         for index, path in enumerate(paths):
@@ -46,7 +45,7 @@ class PtJsonLib:
             page_type = self.PtPathTypeDetector.get_type(path)
             parent_type = "webRootDirectory" if index == 0 else None
             properties = {"name": path, "url": url, "webPageType": page_type}
-            node_object = self.create_node_object("webSource", parent_type, parent, properties)
+            node_object = self.create_node_object("webSource", parent_type, parent, properties, nodes)
             if type(node_object) is not str: #check whether node already exists
                 parent = node_object["key"]
                 nodes.append(node_object)
@@ -67,20 +66,18 @@ class PtJsonLib:
         """Returns paths from url"""
         return url.strip("/").split("/")[2:][1:]
 
-    def create_node_object(self, node_type: str, parent_type=None, parent=None, properties : dict = {}) -> dict:
+    def create_node_object(self, node_type: str, parent_type=None, parent=None, properties: dict = {}, nodes: list=[]) -> dict:
         """Creates node object"""
         assert type(properties) is dict
-        ident = self.node_duplicity_check(parent_type, properties)
+        ident = self.node_duplicity_check(parent_type, properties, nodes)
         if ident:
             return ident
         return {"type": node_type, "key": self.create_guid(), "parent": parent, "parentType": parent_type, "properties": properties, "vulnerabilities": [] }
 
-    def node_duplicity_check(self, parent_type, properties: dict) -> str | None:
+    def node_duplicity_check(self, parent_type, properties: dict, nodes: list) -> str | None:
         """Returns node ident if node already exists in json_object else returns None"""
-        if not parent_type:
-            return None
-        for node in self.json_object["result"]["nodes"]:
-            if node["parent_type"] == parent_type:
+        for node in nodes:
+            if node["parentType"] == parent_type:
                 if node["properties"] == properties:
                     return node["key"]
         return None
@@ -90,7 +87,7 @@ class PtJsonLib:
         return str(uuid.uuid4())
 
     def add_property(self, name: str, value: str) -> None:
-        self.json_object["result"]["properties"].update({"name": name, "value": value})
+        self.json_object["results"]["properties"].update({"name": name, "value": value})
 
     def add_vulnerability(self, code: str, request: str=None, response: str=None, description: str=None, score: str=None, note: str=None, node_key: str=None) -> None:
         """Add vulnerability code to the json result, if <node_key> parameter is provided, vulnerability will be added to the specified node instead."""
@@ -99,12 +96,12 @@ class PtJsonLib:
 
         if node_key:
             vuln_dict.pop("node_key")
-            for d in self.json_object["result"]["nodes"]:
+            for d in self.json_object["results"]["nodes"]:
                 if d["key"] == node_key:
                     d["vulnerabilities"].append(vuln_dict)
                     break
         else:
-            self.json_object["result"]["vulnerabilities"].append(vuln_dict)
+            self.json_object["results"]["vulnerabilities"].append(vuln_dict)
 
 
     def set_status(self, status: str, message: str = "") -> None:
