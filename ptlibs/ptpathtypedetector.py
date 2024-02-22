@@ -78,16 +78,29 @@ class PtPathTypeDetector:
         '.inf', '.info', '.stat', '.dat', '.reg', '.prefs', '.pref'
     ]
 
+    HTML_EXTENSIONS = [
+        '.htm', '.html', ".shtml", ".xhtml", '.php', '.asp', '.aspx', '.jsp'
+    ]
+
+    BINARY_EXTENSIONS = [
+        '.exe', '.com'
+    ]
+
+    ARCHIVE_EXTENSIONS = [
+        '.rar', '.zip', '.tar', '.tgz', '.gz', '.7z', '.arj'
+    ]
 
     JSON_EXTENSIONS = [
         '.json', '.jsn', '.jason', '.geojson'
     ]
 
-
     XML_EXTENSIONS = [
         '.xml', '.xsd', '.xsl', '.xslt', '.dtd', '.ent', '.xul'
     ]
 
+    DB_EXTENSIONS = [
+        '.db', '.sql'
+    ]
 
     BACKUP_EXTENSIONS = [
         # Backup files
@@ -95,12 +108,9 @@ class PtPathTypeDetector:
         '.snap', '.versions', '.recycle', '.recycler', '.recycled', '.trash', '.deleted',
     ]
 
-    PAGE_EXTENSIONS = [
-        ".html", ".htm", ".shtml", ".xhtml", ".php", ".asp", ".aspx", ".jsp"
-    ]
-
     JAVASCRIPT_EXTENSIONS = [".js"]
     CSS_EXTENSIONS = [".css"]
+    RSS_EXTENSIONS = [".rss"]
 
     def get_type(self, path) -> str:
         """Determine the path type based on the extension name.
@@ -116,45 +126,64 @@ class PtPathTypeDetector:
         self.resource_name, self.extension = os.path.splitext(path)
 
         if self.is_directory():
-            return "webSourceTypeDirectory"
+            return "webPageTypeDirectory"
+        elif self.is_html():
+            return "webPageTypeHtml"
         elif self.is_robots_file():
-            return "webSourceTypeRobotsTxt"
-        elif self.is_sitemap():
-            return "webSourceTypeSitemap"
+            return "webPageTypeRobotsTxt"
+        elif self.is_sitemap_file():
+            return "webPageTypeSitemap"
+        elif self.is_security_file():
+            return "webPageTypeSecurityTxt"
         elif self.is_document():
-            return 'webSourceTypeDocument'
+            return 'webPageTypeDocument'
         elif self.is_image():
-            return 'webSourceTypeImage'
+            return 'webPageTypeImage'
         elif self.is_config():
-            return 'webSourceTypeConfig'
+            return 'webPageTypeConfiguration'
         elif self.is_backup():
-            return 'webSourceTypeBackup'
+            return 'webPageTypeBackup'
         elif self.is_json():
-            return 'webSourceTypeJson'
+            return 'webPageTypeJson'
         elif self.is_xml():
-            return 'webSourceTypeXml'
+            return 'webPageTypeXml'
+        elif self.is_db():
+            return 'webPageTypeDatabase'
         elif self.is_javascript():
-            return 'webSourceTypeJavascript'
+            return 'webPageTypeJavaScript'
         elif self.is_css():
-            return 'webSourceTypeCss'
-        elif self.is_webpage():
-            return "webSourceTypePage"
+            return 'webPageTypeCss'
+        elif self.is_rss():
+            return 'webPageTypeRss'
+        elif self.is_binary():
+            return 'webPageTypeBinary'
+        elif self.is_archive():
+            return 'webPageTypeArchive'
+        elif self.is_crossdomain_file():
+            return 'webPageTypeCrossDomainXml'
         else:
-            return "webSourceTypeOther"
+            return "webPageTypeOther"
 
 
     def is_directory(self):
         """Determine if the path is a directory."""
         return self.extension == ""
 
-    def is_webpage(self):
-        """Determine if the path is an webpage"""
-        return self.extension in self.PAGE_EXTENSIONS
+    def is_html(self):
+        """Determine if the path is a HTML document."""
+        return self.extension in self.HTML_EXTENSIONS
 
     def is_document(self):
         """Determine if the path is a document."""
         return self.extension in self.DOCUMENT_EXTENSIONS
 
+    def is_binary(self):
+        """Determine if the path is a binary file."""
+        return self.extension in self.BINARY_EXTENSIONS
+
+    def is_archive(self):
+        """Determine if the path is a archive."""
+        return self.extension in self.ARCHIVE_EXTENSIONS
 
     def is_image(self):
         """Determine if the path is an image."""
@@ -180,10 +209,18 @@ class PtPathTypeDetector:
         """Determine if the path is an XML file."""
         return self.extension in self.XML_EXTENSIONS
 
+    def is_db(self):
+        """Determine if the path is an DB file."""
+        return self.extension in self.DB_EXTENSIONS
+
 
     def is_css(self):
         """Determine if the path is a css file."""
         return self.extension in self.CSS_EXTENSIONS
+
+    def is_rss(self):
+        """Determine if the path is a rss file."""
+        return self.extension in self.RSS_EXTENSIONS
 
 
     def is_javascript(self):
@@ -195,7 +232,14 @@ class PtPathTypeDetector:
         """Determine if the path is a robots.txt file."""
         return self.path == "robots.txt"
 
+    def is_crossdomain_file(self):
+        """Determine if the path is a crossdomain.xml file."""
+        return self.path == "crossdomain.xml"
 
-    def is_sitemap(self):
+    def is_sitemap_file(self):
         """Determine if the path is a sitemap.xml file."""
         return self.path == "sitemap.xml"
+
+    def is_security_file(self):
+        """Determine if the path is a security.txt file."""
+        return self.path == "security.txt"
