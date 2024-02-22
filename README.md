@@ -13,7 +13,10 @@ pip install ptlibs
 ```
 - 1.0.5
     - Added tldparser module
-    - ptjsonlib - updated add_property function
+    - Added cli module
+    - Updated add_property function (ptjsonlib)
+    - Updated WebPage definitions (ptpathtypedetector)
+    - Other improvements & fixes
 - 1.0.4
     - JSON changes
 - 1.0.3
@@ -56,7 +59,7 @@ pip install ptlibs
 
 ## License
 
-Copyright (c) 2023 Penterep Security s.r.o.
+Copyright (c) 2024 Penterep Security s.r.o.
 
 ptlibs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
