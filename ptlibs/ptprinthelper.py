@@ -134,8 +134,11 @@ def ptprint_(string: str, end="\n", flush=False, clear_to_eol=False, filehandle=
                 filehandle.write(string.lstrip()+end)
 
 
-def add_spaces_to_eon(string: str, minus=0) -> str:
-    return string + (' ' * (terminal_width() - len_string_without_colors(string) - minus))
+def add_spaces_to_eon(string: str, minus=0, condition=False) -> str:
+    if condition:
+        return string
+    else:
+        return string + (' ' * (terminal_width() - len_string_without_colors(string) - minus))
 
 
 def terminal_width() -> int:
