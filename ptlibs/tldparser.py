@@ -20,6 +20,9 @@ class ParsedResult:
         return repr(self.__dict__)
 
 
+def extract(url: str) -> ParsedResult:
+    return parse_url(url)
+
 def parse_url(url: str) -> ParsedResult:
     """Parse provided <url>"""
 
