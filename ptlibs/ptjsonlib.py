@@ -98,11 +98,17 @@ class PtJsonLib:
             vuln_dict.pop("node_key")
             for d in self.json_object["results"]["nodes"]:
                 if d["key"] == node_key:
-                    d["vulnerabilities"].append(vuln_dict)
+                    if not self.code_in_vulnerabilities(code):
+                        d["vulnerabilities"].append(vuln_dict)
                     break
         else:
-            self.json_object["results"]["vulnerabilities"].append(vuln_dict)
+            if not self.code_in_vulnerabilities(code):
+                self.json_object["results"]["vulnerabilities"].append(vuln_dict)
 
+    def code_in_vulnerabilities(self, code: str) -> bool:
+        for obj in self.json_object["results"]["vulnerabilities"]:
+            if obj.get("code") == code:
+                return True
 
     def set_status(self, status: str, message: str = "") -> None:
         self.json_object["status"] = status
