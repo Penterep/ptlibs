@@ -126,43 +126,43 @@ class PtPathTypeDetector:
         self.resource_name, self.extension = os.path.splitext(path)
 
         if self.is_directory():
-            return "webPageTypeDirectory"
+            return "webSourceTypeDirectory"
         elif self.is_html():
-            return "webPageTypeHtml"
+            return "webSourceTypeHtml"
         elif self.is_robots_file():
-            return "webPageTypeRobotsTxt"
+            return "webSourceTypeRobotsTxt"
         elif self.is_sitemap_file():
-            return "webPageTypeSitemap"
+            return "webSourceTypeSitemap"
         elif self.is_security_file():
-            return "webPageTypeSecurityTxt"
+            return "webSourceTypeSecurityTxt"
         elif self.is_document():
-            return 'webPageTypeDocument'
+            return 'webSourceTypeDocument'
         elif self.is_image():
-            return 'webPageTypeImage'
+            return 'webSourceTypeImage'
         elif self.is_config():
-            return 'webPageTypeConfiguration'
+            return 'webSourceTypeConfiguration'
         elif self.is_backup():
-            return 'webPageTypeBackup'
+            return 'webSourceTypeBackup'
         elif self.is_json():
-            return 'webPageTypeJson'
+            return 'webSourceTypeJson'
         elif self.is_xml():
-            return 'webPageTypeXml'
+            return 'webSourceTypeXml'
         elif self.is_db():
-            return 'webPageTypeDatabase'
+            return 'webSourceTypeDatabase'
         elif self.is_javascript():
-            return 'webPageTypeJavaScript'
+            return 'webSourceTypeJavaScript'
         elif self.is_css():
-            return 'webPageTypeCss'
+            return 'webSourceTypeCss'
         elif self.is_rss():
-            return 'webPageTypeRss'
+            return 'webSourceTypeRss'
         elif self.is_binary():
-            return 'webPageTypeBinary'
+            return 'webSourceTypeBinary'
         elif self.is_archive():
-            return 'webPageTypeArchive'
+            return 'webSourceTypeArchive'
         elif self.is_crossdomain_file():
-            return 'webPageTypeCrossDomainXml'
+            return 'webSourceTypeCrossDomainXml'
         else:
-            return "webPageTypeOther"
+            return "webSourceTypeOther"
 
 
     def is_directory(self):
