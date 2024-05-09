@@ -1,5 +1,5 @@
 import argparse
-from ptlibs import __version__
+from ptlibs._version import __version__
 
 def main():
     parser = argparse.ArgumentParser()

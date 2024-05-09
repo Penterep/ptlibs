@@ -1,109 +1,111 @@
-import requests
-import tempfile
-import re
 import os
+import re
+import tempfile
 
-from ptlibs import ptnethelper
-from urllib.parse import urlparse, urlunparse, ParseResult
+from dataclasses import dataclass
+from functools import lru_cache
+import urllib
 
-class ParsedResult:
-    def __init__(self, kwargs):
-        self.__dict__.update(kwargs)
+import requests
 
-    def __getitem__(self, key):
-        return getattr(self, key, None)
+@dataclass
+class TLDParseResult:
+    """Result object of extract/parse methods"""
+    scheme: str
+    subdomain: str
+    domain: str
+    suffix: str
+    port: str
 
-    def __setitem__(self, key, value):
-        setattr(self, key, value)
-
-    def __repr__(self):
-        return repr(self.__dict__)
+    @property
+    def get_domain(self):
+       return ''.join(part for part in [self.subdomain, self.domain, self.suffix] if part)
 
 
-def extract(url: str) -> ParsedResult:
-    return parse_url(url)
+def extract(url_or_domain: str) -> TLDParseResult:
+    return parse(url_or_domain)
 
-def parse_url(url: str) -> ParsedResult:
-    """Parse provided <url>"""
-
-    if is_domain(url):
-        parsed_url = _move_path_to_netloc(url)
-    elif is_url(url):
-        parsed_url = urlparse(url)
+def parse(url_or_domain: str) -> TLDParseResult:
+    # TODO: IP parsing
+    if is_url(url_or_domain):
+        parsed = urllib.parse.urlparse(url_or_domain)
+    elif is_domain(url_or_domain):
+        parsed = parse_schemeless_url_correctly(url_or_domain)
     else:
-        raise ValueError("Provided <url> is neither a valid url nor domain")
+        return
 
-    scheme = parsed_url.scheme if parsed_url.scheme else ""
-    port   = parsed_url.port
-    netloc = parsed_url.netloc.split(":"+str(port))[0] if port else parsed_url.netloc
-    suffix = get_tld(netloc)
-    netloc = ''.join(netloc.split("." + suffix)) if suffix else netloc
-    domain = netloc
-    subdomains = ""
-
-    if not ptnethelper.is_valid_ip_address(netloc):
-        subdomains = '.'.join(netloc.split(".")[:-1])
-        domain = ''.join(netloc.split(".")[-1])
-
-    return ParsedResult({
-        "scheme": scheme,
-        "subdomain": subdomains,
-        "domain": domain,
-        "suffix": suffix,
-        "port": port,
-    })
-
-def _move_path_to_netloc(url) -> ParseResult:
-    """If <url> lacks a scheme, the urllib.urlparse() function incorrectly sets the netloc to the path. This function fixes this issue."""
-    parsed_url = urlparse(url)
-
-    return ParseResult(
-        scheme=parsed_url.scheme,
-        netloc=parsed_url.path.split("/", 1)[0],
-        path=parsed_url.path.split("/", 1)[1] if len(parsed_url.path.split("/", 1)) > 1 else "",
-        params=parsed_url.params,
-        query=parsed_url.query,
-        fragment=parsed_url.fragment
-    )
+    subdomain, base_domain, suffix, port = _parse_full_domain(parsed.netloc, get_suffix(parsed.netloc.split(":")[0]))
+    return TLDParseResult(parsed.scheme, subdomain, base_domain, suffix, port)
 
 def is_domain(string: str) -> bool:
-    return True if not all([urlparse(string).netloc, urlparse(string).scheme]) and urlparse(string).path and "." in string else False
+    base_url = urllib.parse.urlparse(string).netloc or string.split('/')[0]
+    # Match against a domain pattern with an optional port
+    return bool(re.match(r'^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?$', base_url))
 
 def is_url(string: str) -> bool:
-    return True if all([urlparse(string).netloc, urlparse(string).scheme]) else False
+    parsed = urllib.parse.urlparse(string)
+    return True if all([parsed.netloc, parsed.scheme]) else False
 
-def get_tld(url) -> str:
-    """Retrieve TLD from <url>"""
-    result = sorted([w for w in _get_public_suffix_list() if url.endswith(w)])
-    return result[0][1:] if result else ""
+def _parse_full_domain(domain: str, suffix: str):
+    # Split the domain from the port if present
+    domain_parts = domain.split(':')
+    domain_without_port = domain_parts[0]
+    port = domain_parts[1] if len(domain_parts) > 1 else ""
 
+    # Check and strip the suffix
+    if suffix and domain_without_port.endswith(suffix):
+        domain_without_suffix = domain_without_port[:-len(suffix)].rstrip('.')
+    else:
+        domain_without_suffix = domain_without_port
 
-def get_scheme(url) -> str | None:
-    return url.split("://")[0] if re.match(r"\w*://", url) else None
+    # Extract subdomains and base domain
+    subdomain_parts = domain_without_suffix.split('.')
+    base_domain = subdomain_parts[-1] if len(subdomain_parts) > 1 else domain_without_suffix
+    subdomains = '.'.join(subdomain_parts[:-1]) if len(subdomain_parts) > 1 else ''
 
+    return subdomains, base_domain, suffix, port
 
+def get_suffix(url_or_domain) -> str:
+    """Retrieve the TLD/suffix from a URL or domain using the Public Suffix List."""
+    suffix_list = _get_public_suffix_list()
+    result = [suffix for suffix in suffix_list if url_or_domain.endswith(suffix)]
+    result = sorted(result, key=len, reverse=True)
+    return result[0].lstrip(".") if result else ""
+
+def parse_schemeless_url_correctly(url) -> urllib.parse.ParseResult:
+    """Corrects the parsing of schemeless URL"""
+    parsed = urllib.parse.urlparse("http://" + url if "://" not in url else url)
+    return urllib.parse.ParseResult(
+        scheme="",
+        netloc=parsed.netloc,
+        path=parsed.path,
+        params=parsed.params,
+        query=parsed.query,
+        fragment=parsed.fragment
+    )
+
+@lru_cache(maxsize=None)
 def _get_public_suffix_list() -> list:
-    """Load PSL from tmp, if not present then proceed to download it from www.publicsuffix.org and save it to temp"""
-    def download_psl():
-        response = requests.get("https://www.publicsuffix.org/list/public_suffix_list.dat")
-        suffix_list = ["." + w for w in response.text.split("\n") if w and not w.startswith("//")]
-        return suffix_list
-
-    def save_psl(suffix_list: list) -> None:
+    """Load the Public Suffix List (PSL) from a temporary file, or download it if not present."""
+    try:
+        return _load_psl_from_tmp()
+    except FileNotFoundError:
+        suffix_list = _download_psl()
         with open(os.path.join(tempfile.gettempdir(), "PSL.txt"), "w") as file:
             file.write("\n".join(suffix_list))
+        return suffix_list
 
-    def load_psl_from_tmp() -> list | None:
-        try:
-            with open(os.path.join(tempfile.gettempdir(), "PSL.txt"), "r") as file:
-                suffix_list = [w for w in file.read().split("\n") if w and not w.startswith("//")]
-                return suffix_list
-        except FileNotFoundError as exc:
-            raise exc
+@lru_cache(maxsize=None)
+def _load_psl_from_tmp() -> list:
+    """Load the PSL from a temporary file."""
+    with open(os.path.join(tempfile.gettempdir(), "PSL.txt"), "r") as file:
+        return [line.strip() for line in file if line.strip() and not line.startswith("//")]
 
-    try:
-        suffix_list = load_psl_from_tmp()
-    except FileNotFoundError:
-        suffix_list = download_psl()
-        save_psl(suffix_list)
-    return suffix_list
+@lru_cache(maxsize=None)
+def _download_psl() -> list:
+    """Download the PSL from the official Public Suffix List site."""
+    response = requests.get("https://publicsuffix.org/list/public_suffix_list.dat")
+    if response.status_code == 200:
+        return ["." + line.strip() for line in response.text.split("\n") if line.strip() and not line.startswith("//")]
+    else:
+        raise Exception("Failed to download the Public Suffix List")

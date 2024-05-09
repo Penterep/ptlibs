@@ -1,6 +1,6 @@
 from hashlib import sha256
-import datetime
 from http.cookies import SimpleCookie
+import datetime
 import os
 import pickle
 import signal
@@ -16,12 +16,18 @@ from ptlibs import ptdefs
 from ptlibs.ptprinthelper import out_if, ptprint
 
 
+
 def signal_handler(sig, frame):
     ptprint(f"\r", clear_to_eol=True)
-    ptprint( out_if(f"{ptdefs.colors['ERROR']}Script terminated{ptdefs.colors['TEXT']}", "ERROR"), clear_to_eol=True)
-    sys.exit(0)
-signal.signal(signal.SIGINT, signal_handler)
+    ptprint( out_if(f"{ptdefs.colors['ERROR']}Script terminating. Press CTRL+C again to force.{ptdefs.colors['TEXT']}", "ERROR"), clear_to_eol=True)
 
+    #with open(os.devnull, "w") as devnull:
+    #    sys.stdout = devnull
+        #sys.stderr = devnull
+    sys.exit(1)
+
+# Register the signal handler for SIGINT
+signal.signal(signal.SIGINT, signal_handler)
 
 def read_file(file: str) -> list[str]:
     with open(file, "r") as f:
@@ -121,7 +127,7 @@ def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dic
 def _get_cookies_from_headers(headers: dict) -> dict | None:
     if "Cookie" not in headers:
         return None
-    
+
     cookies_object = SimpleCookie()
     cookies_object.load(headers["Cookie"])
     cookies = {key: morsel.value for key, morsel in cookies_object.items()}
@@ -168,3 +174,23 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dic
     else:
         response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
         return response if not dump_response else (response, get_response_data_dump(response))
+
+
+def clean_html(input_html):
+    """
+    Removes all HTML tags from the input string, replacing <br>, <br/> and </p> tags with newlines.
+
+    Parameters:
+    input_html (str): A string containing HTML content.
+
+    Returns:
+    str: The cleaned string with no HTML tags and certain tags replaced by newline characters.
+    """
+    # Replace <br>, <br/>, and </p> tags with \n
+    patterns_to_newline = re.compile(r'(<br\s*/?>|</p>)', re.IGNORECASE)
+    text_with_newlines = re.sub(patterns_to_newline, '\n', input_html)
+
+    # Remove all other HTML tags
+    clean_text = re.sub(r'<.*?>', '', text_with_newlines)
+
+    return clean_text.rstrip()

@@ -12,17 +12,21 @@ setuptools.setup(
     author_email="info@penterep.com",
     url="https://www.penterep.com/",
     version=__version__,
-    license="GPLv3+",
+    license="GPLv3",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: Implementation :: CPython",
         "Topic :: Software Development :: Libraries :: Python Modules",
-        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"
+        "License :: OSI Approved :: GNU General Public License v3"
     ],
     entry_points = {'console_scripts': ['ptlibs = ptlibs.cli:main']},
-    python_requires = '>=3.6',
+    python_requires = '>=3.9',
     install_requires=["requests", "requests-toolbelt"],
     long_description=long_description,
-    long_description_content_type="text/markdown"
+    long_description_content_type="text/markdown",
+    project_urls = {
+    "homepage":   "https://www.penterep.com/",
+    "repository": "https://github.com/penterep/ptlibs",
+    }
 )
