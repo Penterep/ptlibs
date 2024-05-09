@@ -18,7 +18,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: Implementation :: CPython",
         "Topic :: Software Development :: Libraries :: Python Modules",
-        "License :: OSI Approved :: GNU General Public License v3"
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)"
     ],
     entry_points = {'console_scripts': ['ptlibs = ptlibs.cli:main']},
     python_requires = '>=3.9',
