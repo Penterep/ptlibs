@@ -50,14 +50,14 @@ def check_url_availability(url, proxies={}) -> None:
 
 def get_request_headers(args) -> dict:
     request_headers = {}
-    if vars(args).get(user_agent):
+    if vars(args).get("user_agent"):
         request_headers.update({"User-Agent": args.user_agent})
-    if vars(args).get(cookie):
+    if vars(args).get("cookie"):
         if isinstance(args.cookie, list):
             request_headers.update({"Cookie": '; '.join(args.cookie)})
         elif isinstance(args.cookie, str):
             request_headers.update({"Cookie": args.cookie})
-    if vars(args).get(headers):
+    if vars(args).get("headers"):
         for header in args.headers:
             request_headers.update({header.split(":")[0]: header.split(":")[1]})
     return request_headers
