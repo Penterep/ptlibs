@@ -2,6 +2,7 @@
 import json
 import sys
 import uuid
+import urllib
 
 from ptlibs.ptprinthelper import out_if, out_ifnot, ptprint
 from ptlibs.ptpathtypedetector import PtPathTypeDetector
@@ -74,6 +75,7 @@ class PtJsonLib:
             This function parses the URL into its components and constructs node dictionaries for each part.
             If known_nodes is passed, it filters out nodes that already exist in the known_nodes list.
         """
+
         new_nodes = []
         known_nodes = known_nodes or []
         base_url = self.get_base_url(url)
@@ -103,7 +105,9 @@ class PtJsonLib:
 
     def get_paths(self, url: str) -> list[str]:
         """Returns paths from url"""
-        return url.strip("/").split("/")[2:][1:]
+        parsed_url = urllib.parse.urlparse(url)
+        segments = [segment for segment in parsed_url.path.split("/") if segment]
+        return segments
 
     def create_node_object(self, node_type: str, parent_type=None, parent=None, properties: dict = None, new_nodes: list = None, known_nodes: list = None, vulnerabilities: list = None) -> dict:
         """Creates node object"""
@@ -205,3 +209,4 @@ class PtJsonLib:
         self.set_status("finished", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
         sys.exit(0)
+
