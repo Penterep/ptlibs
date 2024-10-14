@@ -24,9 +24,9 @@ def randomPort() -> int:
     return port
 
 
-def check_connectivity(proxies: dict) -> None:
+def check_connectivity(proxies: dict, timeout=5) -> None:
     try:
-        requests.request("GET", "https://www.google.com", proxies=proxies, verify=False, allow_redirects=True)
+        requests.request("GET", "https://www.google.com", proxies=proxies, verify=False, allow_redirects=True, timeout=timeout)
     except:
         ptprint( out_if(f"{ptdefs.colors['ERROR']}Missing net connectivity{ptdefs.colors['TEXT']}", "ERROR"))
         sys.exit(1)
