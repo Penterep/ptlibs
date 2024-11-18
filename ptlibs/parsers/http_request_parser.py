@@ -300,8 +300,6 @@ class HttpRequestParser():
         # Update request_data with modified POST data
         request_data = self._reconstruct_post_data(post_parameters_dict, content_type)
 
-
-
         query_string = f"?{updated_query}" if updated_query else ""
 
 
@@ -320,10 +318,9 @@ class HttpRequestParser():
         Returns:
             dict: A dictionary of parsed POST parameters.
         """
-        #print("VSTUP", request_data)
         if content_type in ["application/x-www-form-urlencoded", "", None]:
             parsed_qs = urllib.parse.parse_qs(request_data)
-            all_keys = set(key.split('=')[0] for key in request_data.split('&'))
+            all_keys = set(key.split('=')[0] for key in request_data.split('&') if key)
             # Add missing keys to parsed_qs with empty string value
             for key in all_keys:
                 if key not in parsed_qs:
@@ -331,14 +328,8 @@ class HttpRequestParser():
 
             # Convert to regular dictionary, extracting the first value if the list contains one item
             parsed_qs_dict = {key: values[0] if values else '' for key, values in parsed_qs.items()}
-            #input(parsed_qs_dict)
             return parsed_qs_dict
-            """
-            # TODO FIXME
-            print("QSL", dict(urllib.parse.parse_qsl(request_data)))
-            print("QSL2", urllib.parse.parse_qs(request_data))
-            return dict(urllib.parse.parse_qsl(request_data))
-            """
+
         elif content_type == "application/json":
             try:
                 return json.loads(request_data)
@@ -459,7 +450,7 @@ class HttpRequestParser():
 
     def build_request(self, url: str, headers: dict, request_data: str = None, method: str = None, http_version: str = "HTTP/1.1"):
         """Builds valid request from provided args"""
-        # TODO: Validace, ze je URL fakt url.
+
         parsed_url = urllib.parse.urlparse(url)
         if not method:
             method = "GET" if not request_data else "POST"
