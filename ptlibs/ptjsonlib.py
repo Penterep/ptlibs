@@ -209,4 +209,3 @@ class PtJsonLib:
         self.set_status("finished", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
         sys.exit(0)
-

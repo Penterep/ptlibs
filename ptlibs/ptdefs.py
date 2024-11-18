@@ -6,6 +6,7 @@ colors = {
     "TITLE":     "\033[93m",
     "INFO":      "\033[93m",
     "WARNING":   "\033[38;2;255;103;0m",
+    "ORANGE":   "\033[38;2;255;103;0m",
     "ERROR":     "\033[31m",
     "OK":        "\033[92m",
     "VULN":      "\033[31m",
@@ -20,7 +21,7 @@ colors = {
 chars = {
     "TEXT":      "",
     "TITLE":     "*",
-    "INFO":      "i",
+    "INFO":      "+",
     "WARNING":   "!",
     "ERROR":     "\u2717",
     "OK":        "\u2713",
@@ -29,5 +30,5 @@ chars = {
     "REDIR":     "\u2794",
     "PARSED":    "\u26AD",
     "TITNOBULL": "",
-    "ADDITIONS": ""
+    "ADDITIONS": "",
 }

@@ -134,7 +134,7 @@ def _get_cookies_from_headers(headers: dict) -> dict | None:
     return cookies
 
 
-def load_url_from_web_or_temp(url: str, method: str, headers: dict, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None) -> requests.Response:
+def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None) -> requests.Response:
     """Returns HTTP response from URL.
        If param <cache_request> is present, response will be saved into a temp file. If response is already saved in a temp file, it will be loaded from there.
 
