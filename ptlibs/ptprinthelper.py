@@ -46,7 +46,7 @@ def help_calc_column_width(lines: list[list]) -> list[int]:
         return max_cols_len
 
 
-def ptprint(string: str, bullet_type="TEXT", condition=None, end="\n", flush=False, colortext=False, clear_to_eol=False, newline_above=False, filehandle=False) -> None:
+def ptprint(string: str, bullet_type="TEXT", condition=None, end="\n", flush=False, colortext=False, clear_to_eol=False, newline_above=False, filehandle=False, indent=0) -> None:
     if string:
         if bullet_type:
             bullet_type = bullet_type.upper()
@@ -56,7 +56,7 @@ def ptprint(string: str, bullet_type="TEXT", condition=None, end="\n", flush=Fal
                     string = get_colored_text(string, bullet_type)
                 string = bullet(bullet_type)+string
         elif condition and condition is not None:
-            string = out_if(string, bullet_type, condition, colortext)
+            string = out_if(string, bullet_type, condition, colortext, indent=indent)
         else:
             return
         if newline_above:
@@ -76,12 +76,12 @@ def get_colored_text(string: str, color: str) -> str:
 
 
 
-def out_if(string="", bullet_type="TEXT", condition=True, colortext=False) -> str:
+def out_if(string="", bullet_type="TEXT", condition=True, colortext=False, indent=0) -> str:
     if condition:
         if colortext:
-            return f"{bullet(bullet_type)}{ptdefs.colors[bullet_type]}{string}{ptdefs.colors['TEXT']}"
+            return f"{' '*indent}{bullet(bullet_type)}{ptdefs.colors[bullet_type]}{string}{ptdefs.colors['TEXT']}"
         else:
-            return f"{bullet(bullet_type)}{string}"
+            return f"{' '*indent}{bullet(bullet_type)}{string}"
 
 
 def out_title_if(string="", condition=True, show_bullet=True) -> str:
