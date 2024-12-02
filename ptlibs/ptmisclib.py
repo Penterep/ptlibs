@@ -175,6 +175,11 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies
         response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
         return response if not dump_response else (response, get_response_data_dump(response))
 
+def load_url(url: str, method: str, **kwargs) -> requests.Response:
+    """
+    A simplified version that delegates to the full function with fewer arguments.
+    """
+    return load_url_from_web_or_temp(url, method, **kwargs)
 
 def clean_html(input_html):
     """
