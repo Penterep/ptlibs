@@ -239,7 +239,8 @@ class HttpRequestParser():
         """
         return self._update_parameter_value(http_request=self._load_and_validate_http_request(http_request), parameter=parameter, new_value=payload)
 
-    def _get_content_type(self, headers):
+    def get_content_type(self, headers):
+        """Retrieve content type from headers"""
         return next((value for key, value in headers.items() if key.lower() == "content-type"), None)
 
     def _update_parameter_value(self, http_request: str, parameter: str | int, new_value: str) -> str:
