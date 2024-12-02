@@ -21,6 +21,7 @@ setuptools.setup(
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)"
     ],
     entry_points = {'console_scripts': ['ptlibs = ptlibs.cli:main']},
+    include_package_data= True,
     python_requires = '>=3.9',
     install_requires=["requests", "requests-toolbelt"],
     long_description=long_description,
