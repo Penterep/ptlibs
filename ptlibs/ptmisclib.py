@@ -3,7 +3,6 @@ from http.cookies import SimpleCookie
 import datetime
 import os
 import pickle
-import pkg_resources
 import signal
 import sys
 import tempfile
@@ -203,6 +202,6 @@ def clean_html(input_html):
 
 def get_tlds():
     """Returns a list of unique TLDs"""
-    path_to_tld = pkg_resources.resource_filename('ptlibs', 'data/iana_tlds.txt')
+    path_to_tld = os.path.join(os.path.dirname(__file__), 'data', 'iana_tlds.txt')
     tlds = {line.strip() for line in open(path_to_tld) if len(line.strip().split()) == 1}
     return tlds
