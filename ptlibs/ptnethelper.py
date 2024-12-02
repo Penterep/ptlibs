@@ -49,6 +49,7 @@ def check_url_availability(url, proxies={}) -> None:
 
 
 def get_request_headers(args) -> dict:
+    """Builds full headers dictionary from provided <args>"""
     request_headers = {}
     if vars(args).get("user_agent"):
         request_headers.update({"User-Agent": args.user_agent})
