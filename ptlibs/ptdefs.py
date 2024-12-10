@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 # Colors definitions
 colors = {
     "TEXT":      "\033[0m",
+    "":          "\033[0m",
     "TITLE":     "\033[93m",
     "INFO":      "\033[93m",
     "WARNING":   "\033[38;2;255;103;0m",
@@ -20,6 +21,7 @@ colors = {
 # Chars definitions
 chars = {
     "TEXT":      "",
+    "":          "",
     "TITLE":     "*",
     "INFO":      "+",
     "WARNING":   "!",

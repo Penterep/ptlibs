@@ -48,23 +48,31 @@ def help_calc_column_width(lines: list[list]) -> list[int]:
 
 def ptprint(string: str, bullet_type="TEXT", condition=None, end="\n", flush=False, colortext=False, clear_to_eol=False, newline_above=False, filehandle=False, indent=0) -> None:
     if string:
-        if bullet_type:
-            bullet_type = bullet_type.upper()
+        bullet_type = "" if not isinstance(bullet_type, str) else bullet_type
+        bullet_type = bullet_type.upper()
         if condition is None:
-            if bullet_type:
-                if colortext:
+            if colortext:
+                if isinstance(colortext, str):
+                    string = get_colored_text(string, colortext)
+                else:
                     string = get_colored_text(string, bullet_type)
-                string = bullet(bullet_type)+string
+            else:
+                string = bullet(bullet_type) + string
+
         elif condition and condition is not None:
             string = out_if(string, bullet_type, condition, colortext, indent=indent)
         else:
             return
+
         if newline_above:
             string = "\n" + string
+
         if clear_to_eol:
             if os.name == "posix":
                 string = string + (' ' * (terminal_width() - len_string_without_colors(string)))
+
         print(string, end=end, flush=flush)
+
         if filehandle:
             string = re.sub("\033\[\d+m", "", string)
             filehandle.write(string.lstrip()+end)
@@ -77,11 +85,14 @@ def get_colored_text(string: str, color: str) -> str:
 
 
 def out_if(string="", bullet_type="TEXT", condition=True, colortext=False, indent=0) -> str:
+    if bullet_type is None:
+        bullet_type = ""
     if condition:
         if colortext:
             return f"{' '*indent}{bullet(bullet_type)}{ptdefs.colors[bullet_type]}{string}{ptdefs.colors['TEXT']}"
         else:
             return f"{' '*indent}{bullet(bullet_type)}{string}"
+    return ""
 
 
 def out_title_if(string="", condition=True, show_bullet=True) -> str:
