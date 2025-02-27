@@ -133,6 +133,11 @@ def _get_cookies_from_headers(headers: dict) -> dict | None:
     cookies = {key: morsel.value for key, morsel in cookies_object.items()}
     return cookies
 
+def load_url(url: str, method: str, **kwargs) -> requests.Response:
+    """
+    A simplified version that delegates to the full function with fewer arguments.
+    """
+    return load_url_from_web_or_temp(url, method, **kwargs)
 
 def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None) -> requests.Response:
     """Returns HTTP response from URL.
@@ -174,12 +179,6 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies
     else:
         response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
         return response if not dump_response else (response, get_response_data_dump(response))
-
-def load_url(url: str, method: str, **kwargs) -> requests.Response:
-    """
-    A simplified version that delegates to the full function with fewer arguments.
-    """
-    return load_url_from_web_or_temp(url, method, **kwargs)
 
 def clean_html(input_html):
     """
