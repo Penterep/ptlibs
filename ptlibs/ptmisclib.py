@@ -1,3 +1,4 @@
+import argparse
 from hashlib import sha256
 from http.cookies import SimpleCookie
 import datetime
@@ -22,9 +23,6 @@ def signal_handler(sig, frame):
     ptprint(f"\r", clear_to_eol=True)
     ptprint( out_if(f"{ptdefs.colors['ERROR']}Script terminating. Press CTRL+C again to force.{ptdefs.colors['TEXT']}", "ERROR"), clear_to_eol=True)
 
-    #with open(os.devnull, "w") as devnull:
-    #    sys.stdout = devnull
-        #sys.stderr = devnull
     sys.exit(1)
 
 # Register the signal handler for SIGINT
@@ -41,6 +39,26 @@ def pairs(pair):
         return pair
     else:
         raise ValueError('Not a pair')
+
+def parse_range(string: str):
+    """Parses range, expected formats are 1-999999, 1 9999"""
+    match = re.match(r'(\d+)[- ](\d+)$', string)
+    try:
+        if not match:
+            raise argparse.ArgumentTypeError(f"Error: {string} is invalid range format. Expected range format: 1-99999 or 1 99999.")
+        if int(match.group(1)) > int(match.group(2)):
+            raise argparse.ArgumentTypeError(f"Error: Provided range is not valid")
+        if (int(match.group(1)) > 99999) or (int(match.group(2)) > 99999):
+            raise argparse.ArgumentTypeError(f"Error: Provided range is too high")
+
+        if int(match.group(1)) < 1:
+            return ( 1, int(match.group(2)) )
+        return ( int(match.group(1)), int(match.group(2)) )
+
+    except argparse.ArgumentTypeError as e:
+        print(e)
+        sys.exit(1)
+        return (1, 10)
 
 
 def get_wordlist(file_handler, begin_with=""):

@@ -4,6 +4,8 @@ import requests
 import time
 import re
 
+requests.packages.urllib3.disable_warnings()
+
 class HttpClient:
     _instance = None
 
