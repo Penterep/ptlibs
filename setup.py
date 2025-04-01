@@ -23,7 +23,7 @@ setuptools.setup(
     entry_points = {'console_scripts': ['ptlibs = ptlibs.cli:main']},
     include_package_data= True,
     python_requires = '>=3.9',
-    install_requires=["requests", "requests-toolbelt"],
+    install_requires=["requests", "requests-toolbelt", "filelock", "idna", "appdirs"], # filelock, idna, appdirs for cachefile
     long_description=long_description,
     long_description_content_type="text/markdown",
     project_urls = {
