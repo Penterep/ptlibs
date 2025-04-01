@@ -8,13 +8,13 @@ class HttpClient:
     _instance = None
 
     def __new__(cls, *args, **kwargs):
-        """This method ensures that only one instance of the class is created"""
+        """Ensures that only one instance of the class is created"""
         if not cls._instance:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self, args=None, ptjsonlib=None):
-        if not hasattr(self, 'initialized'): # This ensures __init__ is only called once
+        if not hasattr(self, '_initialized'): # This ensures __init__ is only called once
             if args is None or ptjsonlib is None:
                 raise ValueError("Both 'args' and 'ptjsonlib' must be provided")
 
@@ -23,7 +23,7 @@ class HttpClient:
             self.proxy = self.args.proxy
 
             self.delay = getattr(self.args, 'delay', 0)
-            self.initialized = True  # Flag to indicate that initialization is complete
+            self._initialized = True  # Flag to indicate that initialization is complete
 
     def is_valid_url(self, url):
         # A basic regex to validate the URL format
@@ -47,9 +47,10 @@ class HttpClient:
 
             if self.delay > 0:
                 time.sleep(self.delay / 1000)  # Convert ms to seconds
+
             return response
+
         except Exception as e:
-            # Re-raise the original exception with some additional context
             self.ptjsonlib.end_error(f"Error connecting to server: {e}", self.args.json)
 
     def _check_fpd_in_response(self, response, *, base_indent=4):
@@ -69,14 +70,11 @@ class HttpClient:
             r"<b>Notice</b>: .* on line.*"
         ]
         try:
-            # Check for FPD errors in the response
             for pattern in error_patterns:
                 match = re.search(pattern, response.text)
                 if match:
                     clean_message = re.sub(r"<.*?>", "", match.group(0))
                     ptprint(f"[{response.status_code}] {response.url}\n{' '*(base_indent*2)}{ get_colored_text(clean_message, "ADDITIONS")}", "VULN", condition=not self.args.json, indent=base_indent, clear_to_eol=True)
                     return
-            #return
-            #print("No FPD error found in the response.")
         except Exception as e:
             print(f"Error during FPD check: {e}")
