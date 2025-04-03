@@ -3,6 +3,8 @@ from ptlibs import ptprinthelper
 import requests
 import time
 import re
+import os
+import urllib
 
 requests.packages.urllib3.disable_warnings()
 
@@ -24,6 +26,9 @@ class HttpClient:
             self.ptjsonlib = ptjsonlib
             self.proxy = self.args.proxy
 
+            self._store_urls: bool = False
+            self._stored_urls: bool = set()
+
             self.delay = getattr(self.args, 'delay', 0)
             self._initialized = True  # Flag to indicate that initialization is complete
 
@@ -39,13 +44,17 @@ class HttpClient:
             r'(?:/?|[/?]\S+)$', re.IGNORECASE)
         return re.match(regex, url) is not None
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, **kwargs):
+    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, store_urls=False, **kwargs):
         """Wrapper for requests.request that allows dynamic passing of arguments."""
         try:
             response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=headers, data=data, proxies=self.proxy if self.proxy else {}, verify=False if self.proxy else True)
 
             if method.upper() == "GET":
                 self._check_fpd_in_response(response)
+
+            if self._store_urls or store_urls:
+                if response.status_code != 404:
+                    self._stored_urls.add(response.url)
 
             if self.delay > 0:
                 time.sleep(self.delay / 1000)  # Convert ms to seconds
@@ -54,6 +63,30 @@ class HttpClient:
 
         except Exception as e:
             self.ptjsonlib.end_error(f"Error connecting to server: {e}", self.args.json)
+
+
+    def _extract_unique_directories(self, target_domain: str = None, urls: list = None):
+        """
+        Extracts unique directories from a list of URLs.
+        If target_domain is specified, only URLs matching the domain are processed.
+        If urls are provided, they are used instead of self._stored_urls.
+        """
+
+        unique_directories = set()
+        urls = urls or self._stored_urls  # Use provided URLs or fallback to stored ones
+        for url in self._stored_urls:
+            parsed_url = urllib.parse.urlparse(url)
+            if target_domain is None or parsed_url.netloc == target_domain:  # Filter if target_domain is set
+                path_parts = parsed_url.path.strip("/").split("/")
+
+                for i in range(len(path_parts)):
+                    directory_path = "/" + "/".join(path_parts[:i + 1])
+                    if not os.path.splitext(directory_path)[1]:  # Exclude if it has a file extension
+                        if not directory_path.endswith('/'):
+                            directory_path += '/'
+                        unique_directories.add(directory_path)
+
+        return sorted(list(unique_directories))  # Sort for consistency
 
     def _check_fpd_in_response(self, response, *, base_indent=4):
         """
