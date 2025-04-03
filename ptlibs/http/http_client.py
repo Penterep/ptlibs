@@ -110,6 +110,7 @@ class HttpClient:
                 if match:
                     clean_message = re.sub(r"<.*?>", "", match.group(0))
                     ptprint(f"[{response.status_code}] {response.url}\n{' '*(base_indent*2)}{ get_colored_text(clean_message, "ADDITIONS")}", "VULN", condition=not self.args.json, indent=base_indent, clear_to_eol=True)
+                    ptprint(f"{ get_colored_text(clean_message, "ADDITIONS")}", "TEXT", condition=not self.args.json, indent=base_indent*2, clear_to_eol=True)
                     return
         except Exception as e:
             print(f"Error during FPD check: {e}")
