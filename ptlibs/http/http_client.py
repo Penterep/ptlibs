@@ -21,15 +21,11 @@ class HttpClient:
         if not hasattr(self, '_initialized'): # This ensures __init__ is only called once
             if args is None or ptjsonlib is None:
                 raise ValueError("Both 'args' and 'ptjsonlib' must be provided")
-
             self.args = args
             self.ptjsonlib = ptjsonlib
             self.proxy = self.args.proxy
-
             self._store_urls: bool = False
             self._stored_urls: bool = set()
-
-            self.delay = getattr(self.args, 'delay', 0)
             self._initialized = True  # Flag to indicate that initialization is complete
 
     def is_valid_url(self, url):
@@ -56,8 +52,8 @@ class HttpClient:
                 if response.status_code != 404:
                     self._stored_urls.add(response.url)
 
-            if self.delay > 0:
-                time.sleep(self.delay / 1000)  # Convert ms to seconds
+            if self.args.delay > 0:
+                time.sleep(self.args.delay / 1000)  # Convert ms to seconds
 
             return response
 
