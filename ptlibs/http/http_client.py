@@ -84,6 +84,7 @@ class HttpClient:
 
         return sorted(list(unique_directories))  # Sort for consistency
 
+
     def _check_fpd_in_response(self, response, *, base_indent=4):
         """
         Checks the given HTTP response for Full Path Disclosure (FPD) errors.
@@ -92,21 +93,43 @@ class HttpClient:
             response (requests.Response): The HTTP response to check for FPD errors.
 
         Prints:
-            An error message if FPD is found in the response, otherwise indicates no FPD error.
+            An error message or extracted path if found in the response.
         """
+
         error_patterns = [
             r"<b>Warning</b>: .* on line.*",
             r"<b>Fatal error</b>: .* on line.*",
             r"<b>Error</b>: .* on line.*",
-            r"<b>Notice</b>: .* on line.*"
+            r"<b>Notice</b>: .* on line.*",
+            r"(?:in\s+)([a-zA-Z]:\\[\\\w.-]+|\/[\w.\/-]+)",  # Windows or Unix full file paths
         ]
+        path_extractor = r"(in\s+(?:[a-zA-Z]:\\[^\s]+|/[\w./\-_]+))"
+
         try:
+            any_vuln = False
+            printed_paths = set()  # Track already printed paths/messages
+
             for pattern in error_patterns:
-                match = re.search(pattern, response.text)
-                if match:
-                    clean_message = re.sub(r"<.*?>", "", match.group(0))
-                    ptprint(f"[{response.status_code}] {response.url}\n{' '*(base_indent*2)}{ get_colored_text(clean_message, "ADDITIONS")}", "VULN", condition=not self.args.json, indent=base_indent, clear_to_eol=True)
-                    ptprint(f"{ get_colored_text(clean_message, "ADDITIONS")}", "TEXT", condition=not self.args.json, indent=base_indent*2, clear_to_eol=True)
-                    return
+                matches = re.finditer(pattern, response.text)
+                for match in matches:
+                    if not any_vuln:
+                        ptprint(f"[{response.status_code}] {response.url}", "VULN", condition=not self.args.json, indent=base_indent, clear_to_eol=True)
+                        any_vuln = True
+
+                    raw_message = match.group(0)
+                    clean_message = re.sub(r"<.*?>", "", raw_message)
+
+                    # Try to extract just the "in ..." path
+                    path_match = re.search(path_extractor, clean_message)
+                    if path_match:
+                        display = path_match.group(1)
+                    else:
+                        display = clean_message
+
+                    # Check if the path/message has already been printed
+                    if display not in printed_paths:
+                        ptprint(f"{get_colored_text(display, 'ADDITIONS')}", "TEXT", condition=not self.args.json, indent=base_indent * 2, clear_to_eol=True)
+                        printed_paths.add(display)
+
         except Exception as e:
             print(f"Error during FPD check: {e}")
