@@ -26,6 +26,7 @@ class HttpClient:
             self.proxy = self.args.proxy
             self._store_urls: bool = False
             self._stored_urls: bool = set()
+            self._base_headers: dict = None
             self._initialized = True  # Flag to indicate that initialization is complete
 
     def is_valid_url(self, url):
@@ -40,10 +41,26 @@ class HttpClient:
             r'(?:/?|[/?]\S+)$', re.IGNORECASE)
         return re.match(regex, url) is not None
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, store_urls=False, **kwargs):
-        """Wrapper for requests.request that allows dynamic passing of arguments."""
+    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, store_urls=False, merge_headers=True, **kwargs):
+        """
+        Send an HTTP request with optional base header merging and custom options.
+
+        Args:
+            url (str): Target URL.
+            method (str): HTTP method (GET, POST, etc.).
+            headers (dict, optional): Request-specific headers.
+            data (Any, optional): Payload to send (form data, JSON, etc.).
+            allow_redirects (bool): Whether to follow redirects.
+            store_urls (bool): Whether to store non-404 URLs internally.
+            merge_headers (bool): If True, merges base headers with provided headers.
+            **kwargs: Additional parameters passed to `requests.request`.
+
+        Returns:
+            requests.Response: The HTTP response object.
+        """
         try:
-            response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=headers, data=data, proxies=self.proxy if self.proxy else {}, verify=False if self.proxy else True)
+            final_headers = self._merge_headers(headers, merge_headers)
+            response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, proxies=self.proxy if self.proxy else {}, verify=False if self.proxy else True)
 
             if method.upper() == "GET":
                 self._check_fpd_in_response(response)
@@ -58,8 +75,22 @@ class HttpClient:
             return response
 
         except Exception as e:
-            self.ptjsonlib.end_error(f"Error connecting to server: {e}", self.args.json)
+            raise e
 
+    def _merge_headers(self, headers: dict | None, merge: bool) -> dict:
+        """
+        Merge base headers with user-provided headers based on the merge flag.
+
+        Args:
+            headers (dict | None): Headers provided during the request.
+            merge (bool): If True, combine base headers with user headers.
+
+        Returns:
+            dict: Final headers to use for the request.
+        """
+        if merge:
+            return {**(self._base_headers or {}), **(headers or {})}
+        return headers or {}
 
     def _extract_unique_directories(self, target_domain: str = None, urls: list = None):
         """
