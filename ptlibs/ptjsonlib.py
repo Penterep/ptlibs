@@ -202,10 +202,10 @@ class PtJsonLib:
         ptprint( out_ifnot(f"Error: {message}", "ERROR", condition) )
         self.set_status("error", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
-        sys.exit(1)
+        os._exit(1)
 
     def end_ok(self, message, condition, bullet_type="OK"):
         ptprint( out_ifnot(message, bullet_type, condition) )
         self.set_status("finished", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
-        sys.exit(0)
+        os._exit(1)

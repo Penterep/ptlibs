@@ -21,9 +21,10 @@ from ptlibs import cachefile
 
 def signal_handler(sig, frame):
     ptprint(f"\r", clear_to_eol=True)
-    ptprint( out_if(f"{ptdefs.colors['ERROR']}Script terminating. Press CTRL+C again to force.{ptdefs.colors['TEXT']}", "ERROR"), clear_to_eol=True)
+    SCRIPT_NAME = os.path.basename(sys.argv[0]).split(".py")[0]
+    ptprint( out_if(f"{ptdefs.colors['ERROR']}Terminating {SCRIPT_NAME}.{ptdefs.colors['TEXT']}", "ERROR"), clear_to_eol=True)
 
-    sys.exit(1)
+    os._exit(1)
 
 # Register the signal handler for SIGINT
 signal.signal(signal.SIGINT, signal_handler)
@@ -32,7 +33,6 @@ def read_file(file: str) -> list[str]:
     with open(file, "r") as f:
         domain_list = [line.strip("\n") for line in f]
         return domain_list
-
 
 def pairs(pair):
     if len(pair.split(":")) == 2:
