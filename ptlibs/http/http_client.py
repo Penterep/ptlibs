@@ -24,6 +24,7 @@ class HttpClient:
             self.args = args
             self.ptjsonlib = ptjsonlib
             self.proxy = self.args.proxy
+            self.timeout = self.args.timeout
             self._store_urls: bool = False
             self._stored_urls: bool = set()
             self._base_headers: dict = None
@@ -41,7 +42,7 @@ class HttpClient:
             r'(?:/?|[/?]\S+)$', re.IGNORECASE)
         return re.match(regex, url) is not None
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, store_urls=False, merge_headers=True, **kwargs):
+    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, store_urls=False, merge_headers=True, timeout=None, **kwargs):
         """
         Send an HTTP request with optional base header merging and custom options.
 
@@ -60,7 +61,8 @@ class HttpClient:
         """
         try:
             final_headers = self._merge_headers(headers, merge_headers)
-            response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, proxies=self.proxy if self.proxy else {}, verify=False if self.proxy else True)
+            timeout = timeout or self.timeout
+            response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
 
             if method.upper() == "GET":
                 self._check_fpd_in_response(response)
