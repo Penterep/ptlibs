@@ -3,6 +3,8 @@ import json
 import sys
 import uuid
 import urllib
+import os
+
 
 from ptlibs.ptprinthelper import out_if, out_ifnot, ptprint
 from ptlibs.ptpathtypedetector import PtPathTypeDetector
