@@ -16,7 +16,7 @@ from requests_toolbelt.utils import dump
 from ptlibs import ptdefs
 from ptlibs.ptprinthelper import out_if, ptprint
 
-from ptlibs import cachefile
+#from ptlibs import cachefile
 
 
 def signal_handler(sig, frame):
