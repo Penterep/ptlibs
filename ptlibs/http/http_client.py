@@ -134,7 +134,7 @@ class HttpClient:
             r"<b>Fatal error</b>: .* on line.*",
             r"<b>Error</b>: .* on line.*",
             r"<b>Notice</b>: .* on line.*",
-            r"(?:in\s+)([a-zA-Z]:\\[\\\w.-]+|\/[\w.\/-]+)",  # Windows or Unix full file paths
+            #r"(?:in\s+)([a-zA-Z]:\\[\\\w.-]+|\/[\w.\/-]+)",  # Windows or Unix full file paths
         ]
         path_extractor = r"(in\s+(?:[a-zA-Z]:\\[^\s]+|/[\w./\-_]+))"
 
