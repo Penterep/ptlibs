@@ -20,7 +20,7 @@ class HttpClient:
     def __init__(self, args=None, ptjsonlib=None):
         if not hasattr(self, '_initialized'): # This ensures __init__ is only called once
             if args is None or ptjsonlib is None:
-                raise ValueError("Both 'args' and 'ptjsonlib' must be provided")
+                raise ValueError("PtHttpClient: Error: Both 'args' and 'ptjsonlib' must be provided for init")
             self.args = args
             self.ptjsonlib = ptjsonlib
             self.proxy = self.args.proxy
@@ -62,7 +62,7 @@ class HttpClient:
         try:
             final_headers = self._merge_headers(headers, merge_headers)
             timeout = timeout or self.timeout
-            response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
+            self.response = response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
 
             if method.upper() == "GET":
                 self._check_fpd_in_response(response)
@@ -71,10 +71,10 @@ class HttpClient:
                 if response.status_code != 404:
                     self._stored_urls.add(response.url)
 
-            if self.args.delay > 0:
+            if hasattr(self.args, 'delay') and self.args.delay > 0:
                 time.sleep(self.args.delay / 1000)  # Convert ms to seconds
 
-            return response
+            return self.response
 
         except Exception as e:
             raise e
@@ -139,7 +139,7 @@ class HttpClient:
         path_extractor = r"(in\s+(?:[a-zA-Z]:\\[^\s]+|/[\w./\-_]+))"
 
         try:
-            any_vuln = False
+            self.response._is_fpd_vuln = any_vuln = False
             printed_paths = set()  # Track already printed paths/messages
 
             for pattern in error_patterns:
@@ -147,7 +147,8 @@ class HttpClient:
                 for match in matches:
                     if not any_vuln:
                         ptprint(f"[{response.status_code}] {response.url}", "VULN", condition=not self.args.json, indent=base_indent, clear_to_eol=True)
-                        any_vuln = True
+                        self.response._is_fpd_vuln = any_vuln = True
+
 
                     raw_message = match.group(0)
                     clean_message = re.sub(r"<.*?>", "", raw_message)
