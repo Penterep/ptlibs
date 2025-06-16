@@ -1,12 +1,13 @@
-from ptlibs.ptprinthelper import ptprint, get_colored_text
-from ptlibs import ptprinthelper
-import requests
-import time
-import re
 import os
+import re
+import time
 import urllib
 
-requests.packages.urllib3.disable_warnings()
+from threading import Lock
+from ptlibs.ptprinthelper import ptprint, get_colored_text
+from ptlibs import ptprinthelper
+
+import requests; requests.packages.urllib3.disable_warnings()
 
 class HttpClient:
     _instance = None
@@ -29,6 +30,7 @@ class HttpClient:
             self._stored_urls: bool = set()
             self._base_headers: dict = None
             self._initialized = True  # Flag to indicate that initialization is complete
+            self._lock = Lock()
 
     def is_valid_url(self, url):
         # A basic regex to validate the URL format
@@ -62,19 +64,21 @@ class HttpClient:
         try:
             final_headers = self._merge_headers(headers, merge_headers)
             timeout = timeout or self.timeout
-            self.response = response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
+            self.response =  response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
 
             if method.upper() == "GET":
-                self._check_fpd_in_response(response)
+                with self._lock:
+                    self._check_fpd_in_response(response)
 
             if self._store_urls or store_urls:
                 if response.status_code != 404:
-                    self._stored_urls.add(response.url)
+                    with self._lock:
+                        self._stored_urls.add(response.url)
 
             if hasattr(self.args, 'delay') and self.args.delay > 0:
                 time.sleep(self.args.delay / 1000)  # Convert ms to seconds
 
-            return self.response
+            return response
 
         except Exception as e:
             raise e
@@ -87,8 +91,7 @@ class HttpClient:
             headers (dict | None): Headers provided during the request.
             merge (bool): If True, combine base headers with user headers.
 
-        Returns:
-            dict: Final headers to use for the request.
+        Returns: 
         """
         if merge:
             return {**(self._base_headers or {}), **(headers or {})}
@@ -134,6 +137,7 @@ class HttpClient:
             r"<b>Fatal error</b>: .* on line.*",
             r"<b>Error</b>: .* on line.*",
             r"<b>Notice</b>: .* on line.*",
+            #r"(<b>)?Uncaught Exception(</b>)?: [.\s]* on line.*",
             #r"(?:in\s+)([a-zA-Z]:\\[\\\w.-]+|\/[\w.\/-]+)",  # Windows or Unix full file paths
         ]
         path_extractor = r"(in\s+(?:[a-zA-Z]:\\[^\s]+|/[\w./\-_]+))"
@@ -151,6 +155,12 @@ class HttpClient:
 
 
                     raw_message = match.group(0)
+                    text_only = re.sub(r'<[^>]+>', '', raw_message)
+                    if text_only not in printed_paths:
+                        ptprint(f"{get_colored_text(text_only, 'ADDITIONS')}", "TEXT", condition=not self.args.json, indent=base_indent * 2, clear_to_eol=True)
+                        printed_paths.add(text_only)
+
+                    """
                     clean_message = re.sub(r"<.*?>", "", raw_message)
 
                     # Try to extract just the "in ..." path
@@ -164,6 +174,6 @@ class HttpClient:
                     if display not in printed_paths:
                         ptprint(f"{get_colored_text(display, 'ADDITIONS')}", "TEXT", condition=not self.args.json, indent=base_indent * 2, clear_to_eol=True)
                         printed_paths.add(display)
-
+                    """
         except Exception as e:
             print(f"Error during FPD check: {e}")
