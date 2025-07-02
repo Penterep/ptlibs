@@ -32,6 +32,30 @@ class HttpClient:
             self._initialized = True  # Flag to indicate that initialization is complete
             self._lock = Lock()
 
+    @classmethod
+    def get_instance(cls, args=None, ptjsonlib=None):
+        """
+        Returns the singleton instance of the HttpClient.
+
+        If the instance does not exist yet, it will be created using the provided
+        `args` and `ptjsonlib`. Subsequent calls will return the already created instance.
+
+        Args:
+            args (optional): Initialization arguments required on first instantiation.
+            ptjsonlib (optional): Additional initialization object required on first instantiation.
+
+        Raises:
+            ValueError: If called for the first time without required `args` or `ptjsonlib`.
+
+        Returns:
+            HttpClient: The singleton HttpClient instance.
+        """
+        if cls._instance is None:
+            if args is None or ptjsonlib is None:
+                raise ValueError("HttpClient must be initialized with args and ptjsonlib")
+            cls._instance = cls(args, ptjsonlib)
+        return cls._instance
+
     def is_valid_url(self, url):
         # A basic regex to validate the URL format
         regex = re.compile(
