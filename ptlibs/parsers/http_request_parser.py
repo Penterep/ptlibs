@@ -471,7 +471,7 @@ class HttpRequestParser():
         assert type(parameter_index) == int
         url, request_method, headers, request_data = self.parse_http_request(http_request)
         # Parse URL and parameters
-        content_type = self._get_content_type(headers)
+        content_type = self.get_content_type(headers)
         parsed_url = urllib.parse.urlparse(url)
         get_parameters_list: list = urllib.parse.parse_qsl(parsed_url.query)
         post_parameters_dict: dict = self._parse_post_data(request_data, content_type)
@@ -485,5 +485,3 @@ class HttpRequestParser():
             return key
         else:
             raise IndexError("Parameter index '{parameter_index}' out of bounds.")
-
-    
