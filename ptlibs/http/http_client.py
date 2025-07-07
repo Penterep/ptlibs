@@ -24,8 +24,8 @@ class HttpClient:
                 raise ValueError("PtHttpClient: Error: Both 'args' and 'ptjsonlib' must be provided for init")
             self.args = args
             self.ptjsonlib = ptjsonlib
-            self.proxy = self.args.proxy
-            self.timeout = self.args.timeout
+            self.proxy = getattr(self.args, 'proxy', None)
+            self.timeout = getattr(self.args, 'timeout', None)
             self._store_urls: bool = False
             self._stored_urls: bool = set()
             self._base_headers: dict = None
