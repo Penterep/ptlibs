@@ -5,8 +5,7 @@ import uuid
 import urllib
 import os
 
-
-from ptlibs.ptprinthelper import out_if, out_ifnot, ptprint
+from ptlibs.ptprinthelper import out_if, out_ifnot, ptprint, get_colored_text
 from ptlibs.ptpathtypedetector import PtPathTypeDetector
 
 
@@ -200,8 +199,10 @@ class PtJsonLib:
         self.add_node(node)
         return node["key"]
 
-    def end_error(self, message, condition):
+    def end_error(self, message, condition, details=None):
         ptprint( out_ifnot(f"Error: {message}", "ERROR", condition) )
+        if details:
+            ptprint("    " + out_ifnot(f"{get_colored_text(details, "ADDITIONS")}", "TEXT", condition))
         self.set_status("error", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
         os._exit(1)
