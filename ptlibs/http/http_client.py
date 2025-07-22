@@ -88,7 +88,7 @@ class HttpClient:
         try:
             final_headers = self._merge_headers(headers, merge_headers)
             timeout = timeout or self.timeout
-            self.response =  response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
+            response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
 
             if method.upper() == "GET":
                 with self._lock:
@@ -107,6 +107,7 @@ class HttpClient:
         except Exception as e:
             raise e
 
+
     def _merge_headers(self, headers: dict | None, merge: bool) -> dict:
         """
         Merge base headers with user-provided headers based on the merge flag.
@@ -115,7 +116,7 @@ class HttpClient:
             headers (dict | None): Headers provided during the request.
             merge (bool): If True, combine base headers with user headers.
 
-        Returns: 
+        Returns:
         """
         if merge:
             return {**(self._base_headers or {}), **(headers or {})}
@@ -167,7 +168,7 @@ class HttpClient:
         path_extractor = r"(in\s+(?:[a-zA-Z]:\\[^\s]+|/[\w./\-_]+))"
 
         try:
-            self.response._is_fpd_vuln = any_vuln = False
+            response._is_fpd_vuln = any_vuln = False
             printed_paths = set()  # Track already printed paths/messages
 
             for pattern in error_patterns:
@@ -175,7 +176,7 @@ class HttpClient:
                 for match in matches:
                     if not any_vuln:
                         ptprint(f"[{response.status_code}] {response.url}", "VULN", condition=not self.args.json, indent=base_indent, clear_to_eol=True)
-                        self.response._is_fpd_vuln = any_vuln = True
+                        response._is_fpd_vuln = any_vuln = True
 
 
                     raw_message = match.group(0)
