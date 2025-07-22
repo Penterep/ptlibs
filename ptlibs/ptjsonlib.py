@@ -202,7 +202,7 @@ class PtJsonLib:
     def end_error(self, message, condition, details=None):
         ptprint( out_ifnot(f"Error: {message}", "ERROR", condition) )
         if details:
-            ptprint("    " + out_ifnot(f"{get_colored_text(details, "ADDITIONS")}", "TEXT", condition))
+            ptprint("    " + out_ifnot(f"{get_colored_text(details, 'ADDITIONS')}", "TEXT", condition))
         self.set_status("error", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
         os._exit(1)
