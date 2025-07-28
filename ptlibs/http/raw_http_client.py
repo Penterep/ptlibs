@@ -122,14 +122,23 @@ class RawHttpClient:
                 raise TypeError("Raw request data must be str or bytes")
 
         try:
-            http_conn.putrequest(method.upper(), path, skip_host=True)
-            #host_header = host if (parsed.port is None or parsed.port in [80, 443]) else f"{host}:{parsed.port}"
-            host_header = parsed.netloc
-            http_conn.putheader("Host", host_header)
+            if proxy_url and not is_https:
+                request_path = url
+            else:
+                request_path = path
+
+            http_conn.putrequest(method.upper(), request_path, skip_host=True)
+
+            # Only add Host header if not provided by the user (via headers)
+            if not any(k.lower() == "host" for k in (headers or {})):
+                host_header = parsed.netloc
+                http_conn.putheader("Host", host_header)
 
             for key, value in (headers or {}).items():
                 if key.lower() != "host":
                     http_conn.putheader(key, value)
+                else:
+                    http_conn.putheader("Host", value)
 
             if body:
                 http_conn.putheader("Content-Length", str(len(body)))
@@ -141,7 +150,7 @@ class RawHttpClient:
 
             raw_response = http_conn.getresponse()
             response = RawHttpResponse(raw_response, url)
-            _ = response.content  # Force read body to release socket before returning response
+            _ = response.content # Force read body to release socket before returning response
             return response
 
         except (socket.timeout, ssl.SSLError, OSError) as e:
@@ -175,6 +184,7 @@ class RawHttpResponse:
         status (int): HTTP status code.
         reason (str): HTTP reason phrase.
         headers (Dict[str, str]): Case-insensitive dict of response headers.
+        msg (http.client.HTTPMessage): Full original HTTP header block.
     """
 
     def __init__(self, response, url: str):
@@ -188,6 +198,7 @@ class RawHttpResponse:
         self.url = url
         self.status = response.status
         self.reason = response.reason
+        self.msg = response.msg
         self.headers = {k.lower(): v for k, v in response.getheaders()}
         self._raw_response = response
         self._content = None
