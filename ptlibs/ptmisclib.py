@@ -9,6 +9,7 @@ import sys
 import tempfile
 import typing
 import re
+import shutil
 
 import requests
 from requests_toolbelt.utils import dump
@@ -18,16 +19,6 @@ from ptlibs.ptprinthelper import out_if, ptprint
 
 #from ptlibs import cachefile
 
-
-def signal_handler(sig, frame):
-    sys.stdout.write("\033[?25h")  # Show cursor (if hidden by any reason)
-    ptprint(f"\r", clear_to_eol=True)
-    SCRIPT_NAME = os.path.basename(sys.argv[0]).split(".py")[0]
-    ptprint( out_if(f"{ptdefs.colors['ERROR']}Terminating {SCRIPT_NAME}.{ptdefs.colors['TEXT']}", "ERROR"), clear_to_eol=True)
-    os._exit(1)
-
-# Register the signal handler for SIGINT
-signal.signal(signal.SIGINT, signal_handler)
 
 def read_file(file: str) -> list[str]:
     with open(file, "r") as f:
@@ -183,8 +174,8 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies
     """
     if cache:
         # Create penterep dir in tmp if not present
-        if not os.path.exists(os.path.join(tempfile.gettempdir(), "pentereptools")):
-            os.makedirs(os.path.join(tempfile.gettempdir(), "pentereptools"))
+        if not os.path.exists(get_penterep_temp_dir()):
+            os.makedirs(get_penterep_temp_dir())
 
         filename = get_temp_filename_from_url(url, method, headers)
         if exists_temp(filename):
@@ -198,6 +189,56 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies
     else:
         response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
         return response if not dump_response else (response, get_response_data_dump(response))
+
+def read_temp_dir() -> tuple[int, int]:
+    """
+    Reads the 'pentereptools' temp directory.
+
+    Returns:
+        tuple: (item_count, total_size_bytes)
+            - item_count: number of files and folders inside
+            - total_size_bytes: total size of all files in bytes
+    """
+    temp_path = get_penterep_temp_dir()
+    if not os.path.exists(temp_path):
+        return 0, 0
+
+    total_size = 0
+    item_count = 0
+
+    for root, dirs, files in os.walk(temp_path):
+        item_count += len(dirs) + len(files)
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                total_size += os.path.getsize(file_path)
+            except OSError:
+                pass  # file might have been deleted during read
+
+    return item_count, total_size
+
+def clear_temp_dir() -> None:
+    """
+    Deletes all contents of the 'pentereptools' temp directory, but keeps the directory itself.
+    """
+    temp_path = get_penterep_temp_dir()
+    if not os.path.exists(temp_path):
+        os.makedirs(temp_path)
+        return
+
+    for entry in os.listdir(temp_path):
+        entry_path = os.path.join(temp_path, entry)
+        try:
+            if os.path.isfile(entry_path) or os.path.islink(entry_path):
+                os.unlink(entry_path)
+            elif os.path.isdir(entry_path):
+                shutil.rmtree(entry_path)
+        except Exception as e:
+            print(f"Warning: failed to delete {entry_path}: {e}")
+    return True
+
+def get_penterep_temp_dir() -> str:
+    return os.path.join(tempfile.gettempdir(), "pentereptools")
 
 def clean_html(input_html):
     """
@@ -223,3 +264,5 @@ def get_tlds():
     path_to_tld = os.path.join(os.path.dirname(__file__), 'data', 'iana_tlds.txt')
     tlds = {line.strip() for line in open(path_to_tld) if len(line.strip().split()) == 1}
     return tlds
+
+
