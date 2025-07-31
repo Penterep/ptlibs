@@ -47,6 +47,7 @@ def help_calc_column_width(lines: list[list]) -> list[int]:
 
 
 def ptprint(string: str, bullet_type="TEXT", condition=None, end="\n", flush=False, colortext=False, clear_to_eol=False, newline_above=False, filehandle=False, indent=0) -> None:
+
     if string:
         bullet_type = "" if not isinstance(bullet_type, str) else bullet_type
         bullet_type = bullet_type.upper()
