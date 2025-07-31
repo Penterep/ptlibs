@@ -34,8 +34,7 @@ class HttpClient:
                     return raw_proxy
                 return None
 
-            self.proxy = normalize_proxy(args.proxy)
-
+            self.proxy = normalize_proxy(args.proxy) if hasattr(args, 'proxy') else None
             self.timeout = getattr(self.args, 'timeout', None)
             self._store_urls: bool = False
             self._stored_urls = set()
