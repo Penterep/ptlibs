@@ -206,6 +206,7 @@ class PtJsonLib:
         self.set_status("error", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
         sys.stdout.write("\033[?25h") # Show cursor if not shown for any reason
+        sys.stdout.flush()
         os._exit(1)
 
     def end_ok(self, message, condition, bullet_type="OK"):
@@ -213,4 +214,5 @@ class PtJsonLib:
         self.set_status("finished", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
         sys.stdout.write("\033[?25h") # Show cursor if not shown for any reason
+        sys.stdout.flush()
         os._exit(1)
