@@ -180,7 +180,7 @@ class PtJsonLib:
 
     def vuln_code_in_vulnerabilities(self, code: str) -> bool:
         for obj in self.json_object["results"]["vulnerabilities"]:
-            if obj.get("code") == code:
+            if obj.get("vulnCode") == code:
                 return True
 
     def set_status(self, status: str, message: str = "") -> None:
