@@ -175,8 +175,7 @@ class PtJsonLib:
                         node["vulnerabilities"].append(vulnerability_dict)
                     break
         else:
-            existing_vulns = self.json_object["results"]["vulnerabilities"]
-            if not self.vuln_code_in_vulnerabilities(vuln_code, existing_vulns):
+            if not self.vuln_code_in_vulnerabilities(vuln_code):
                 self.json_object["results"]["vulnerabilities"].append(vulnerability_dict)
 
     def vuln_code_in_vulnerabilities(self, code: str) -> bool:
