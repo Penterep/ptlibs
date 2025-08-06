@@ -151,7 +151,7 @@ class HttpClient:
             return response
 
         except Exception as e:
-            raise e
+            self._remap_requests_exception(e)
 
 
     def _merge_headers(self, headers: dict | None, merge: bool) -> dict:
@@ -247,7 +247,68 @@ class HttpClient:
                         printed_paths.add(display)
                     """
         except Exception as e:
-            print(f"Error during FPD check: {e}")
+            pass
+            #print(f"Error during FPD check: {e}")
 
 
+    def _remap_requests_exception(self, exc):
+        """
+        Remap exceptions from `requests` library to the same exception types
+        but with shorter, clearer messages.
 
+        Args:
+            exc (Exception): The original exception raised by the `requests` library.
+
+        Raises:
+            requests.exceptions.RequestException: remapped exception with clearer message.
+            Exception: re-raises the original exception if it's not recognized.
+        """
+        def remap_exception(exc_type, message):
+            new_exc = exc_type(message)
+            raise new_exc from exc
+
+        if isinstance(exc, requests.exceptions.ConnectionError):
+            msg = str(exc).lower()
+            if "name or service not known" in msg or "nodename nor servname provided" in msg:
+                remap_exception(requests.exceptions.ConnectionError, "DNS error: domain name not found")
+            elif "connection refused" in msg:
+                remap_exception(requests.exceptions.ConnectionError, "Connection refused by the server")
+            else:
+                remap_exception(requests.exceptions.ConnectionError, "Connection error occurred")
+
+        elif isinstance(exc, requests.exceptions.Timeout):
+            remap_exception(requests.exceptions.Timeout, "Request timed out")
+
+        elif isinstance(exc, requests.exceptions.HTTPError):
+            status = getattr(exc.response, "status_code", "unknown")
+            remap_exception(requests.exceptions.HTTPError, f"HTTP error occurred: status code {status}")
+
+        elif isinstance(exc, requests.exceptions.InvalidURL):
+            remap_exception(requests.exceptions.InvalidURL, "Invalid URL provided")
+
+        elif isinstance(exc, requests.exceptions.URLRequired):
+            remap_exception(requests.exceptions.URLRequired, "A valid URL is required")
+
+        elif isinstance(exc, requests.exceptions.TooManyRedirects):
+            remap_exception(requests.exceptions.TooManyRedirects, "Too many redirects")
+
+        elif isinstance(exc, requests.exceptions.InvalidSchema):
+            remap_exception(requests.exceptions.InvalidSchema, "Invalid URL schema")
+
+        elif isinstance(exc, requests.exceptions.ChunkedEncodingError):
+            remap_exception(requests.exceptions.ChunkedEncodingError, "Chunked encoding error")
+
+        elif isinstance(exc, requests.exceptions.ContentDecodingError):
+            remap_exception(requests.exceptions.ContentDecodingError, "Content decoding failed")
+
+        elif isinstance(exc, requests.exceptions.StreamConsumedError):
+            remap_exception(requests.exceptions.StreamConsumedError, "Response stream already consumed")
+
+        elif isinstance(exc, requests.exceptions.RetryError):
+            remap_exception(requests.exceptions.RetryError, "Max retries exceeded")
+
+        elif isinstance(exc, requests.exceptions.RequestException):
+            remap_exception(requests.exceptions.RequestException, "General HTTP request error")
+
+        else:
+            raise exc
