@@ -9,6 +9,8 @@ from ptlibs.http.raw_http_client import RawHttpClient
 from ptlibs.ptprinthelper import ptprint, get_colored_text
 from ptlibs import ptprinthelper
 
+from ptlibs.ptmisclib import load_url_from_web_or_temp
+
 import requests; requests.packages.urllib3.disable_warnings()
 
 class HttpClient:
@@ -67,74 +69,50 @@ class HttpClient:
             cls._instance = cls(args, ptjsonlib)
         return cls._instance
 
-    def is_valid_url(self, url):
-        # A basic regex to validate the URL format
-        regex = re.compile(
-            r'^(?:http|ftp)s?://' # http:// or https://
-            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
-            r'localhost|'  # localhost...
-            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|'  # ...or ipv4
-            r'\[?[A-F0-9]*:[A-F0-9:]+\]?)'  # ...or ipv6
-            r'(?::\d+)?'  # optional port
-            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-        return re.match(regex, url) is not None
 
-    def send_raw_request(self, url, method="GET", *, headers=None, data=None, timeout=None, proxies=None):
+    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = {}, timeout=None, verify=False, cache=False, dump=False, store_urls=False, merge_headers=True, **kwargs):
         """
-        Send a raw HTTP request using the internal RawHttpClient with full control over headers, method, body, timeout, and proxy.
-
-        This method provides low-level request capabilities (e.g. sending malformed or non-standard requests) and bypasses
-        high-level libraries like `requests`. It ensures thread-safe access via a lock and supports proxy tunneling for HTTPS.
-
-        Args:
-            url (str): Target URL for the request.
-            method (str): HTTP method to use (default: "GET").
-            headers (dict, optional): Custom HTTP headers to send.
-            data (str or bytes, optional): Raw request body.
-            timeout (float, optional): Timeout in seconds. Defaults to client's configured timeout.
-            proxies (dict, optional): Proxy dictionary in requests-compatible format.
-
-        Returns:
-            RawHttpResponse: Response object with .status, .headers, .text, .content, etc.
-
-        Raises:
-            Exception: Propagates any error raised by the raw HTTP client.
-        """
-        try:
-            with self._lock:
-                response = self._raw_http_client._send_raw_request(
-                    url=url,
-                    method=method,
-                    headers=headers,
-                    data=data,
-                    timeout=timeout,
-                    proxies=self.proxy
-                )
-                return response
-        except Exception as e:
-            raise e
-
-    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, store_urls=False, merge_headers=True, timeout=None, **kwargs):
-        """
-        Send HTTP request with option to use low-level raw HTTP.
+        Send an HTTP request with support for caching.
 
         Args:
             url (str): Target URL.
-            method (str): HTTP method (GET, POST, etc.).
-            headers (dict, optional): Request-specific headers.
-            data (Any, optional): Payload to send (form data, JSON, etc.).
-            allow_redirects (bool): Whether to follow redirects.
-            store_urls (bool): Whether to store non-404 URLs internally.
-            merge_headers (bool): If True, merges base headers with provided headers.
-            **kwargs: Passed to requests.request() for normal requests.
+            method (str, optional): HTTP method to use (e.g., "GET", "POST"). Defaults to "GET".
+            headers (dict, optional): Request-specific headers. If ``merge_headers=True``,
+                they will be merged with the default/base headers.
+            data (Any, optional): Request body or payload (e.g., dict for form data, str/bytes, or JSON).
+            allow_redirects (bool, optional): Whether to follow redirects. Defaults to True.
+            cookies (dict, optional): Cookies to attach to the request. Defaults to {}.
+            timeout (float or tuple, optional): Timeout in seconds for the request (same as in ``requests``).
+            verify (bool or str, optional): Whether to verify SSL certificates. Defaults to False.
+            cache (bool, optional): If True, responses may be cached and served from cache on repeat requests.
+            dump (bool, optional): If True, dumps the raw request/response for debugging.
+            store_urls (bool, optional): If True, internally stores successfully requested URLs (non-404).
+            merge_headers (bool, optional): If True, merges default headers with provided ``headers``.
+            **kwargs: Additional keyword arguments passed directly to ``requests.request()``.
 
         Returns:
-            requests.Response
+            requests.Response: Response object from the executed HTTP request.
         """
         try:
             final_headers = self._merge_headers(headers, merge_headers)
             timeout = timeout or self.timeout
+
+            response = load_url_from_web_or_temp(
+                url=url,
+                method=method,
+                headers=final_headers,
+                proxies=self.proxy if self.proxy else {},
+                data=data,
+                timeout=timeout,
+                redirects=allow_redirects,
+                verify=verify,
+                dump_response=dump,
+                cache=cache
+                )
+
+            """
             response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
+            """
 
             if method.upper() == "GET":
                 with self._lock:
@@ -153,6 +131,50 @@ class HttpClient:
         except Exception as e:
             self._remap_requests_exception(e)
 
+    def send_raw_request(self, url, method="GET", *, headers=None, data=None, timeout=None, proxies=None, custom_request_line=None):
+        """
+        Send a raw HTTP request using the internal RawHttpClient with full control.
+
+        This method provides low-level request capabilities, including:
+            - Sending malformed or non-standard HTTP requests.
+            - Bypassing high-level HTTP libraries like `requests`.
+            - Optional proxy tunneling for HTTPS.
+            - Full control over headers, method, body, and timeout.
+        The request is sent in a thread-safe manner using an internal lock.
+
+        Args:
+            url (str): Target URL for the request.
+            method (str): HTTP method to use (default: "GET"). Ignored if `custom_request_line` is set.
+            headers (dict, optional): Custom HTTP headers to send.
+            data (str or bytes, optional): Raw request body.
+            timeout (float, optional): Timeout in seconds. Defaults to client's configured timeout.
+            proxies (dict, optional): Proxy dictionary in requests-compatible format.
+            custom_request_line (str, optional): If set, sends this exact request line instead of constructing one.
+                Examples:
+                    - "GET / FOO/1.1"
+                    - "GET / HTTP/9.8"
+                    - "FOO / HTTP/9.8"
+
+        Returns:
+            RawHttpResponse: Response object with `.status`, `.headers`, `.text`, `.content`, etc.
+
+        Raises:
+            Exception: Propagates any error raised by the raw HTTP client.
+        """
+        try:
+            with self._lock:
+                response = self._raw_http_client._send_raw_request(
+                    url=url,
+                    method=method,
+                    headers=headers,
+                    data=data,
+                    timeout=timeout,
+                    proxies=self.proxy,
+                    custom_request_line=custom_request_line
+                )
+                return response
+        except Exception as e:
+            raise e
 
     def _merge_headers(self, headers: dict | None, merge: bool) -> dict:
         """
@@ -167,6 +189,18 @@ class HttpClient:
         if merge:
             return {**(self._base_headers or {}), **(headers or {})}
         return headers or {}
+
+    def is_valid_url(self, url):
+        # A basic regex to validate the URL format
+        regex = re.compile(
+            r'^(?:http|ftp)s?://' # http:// or https://
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # domain...
+            r'localhost|'  # localhost...
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|'  # ...or ipv4
+            r'\[?[A-F0-9]*:[A-F0-9:]+\]?)'  # ...or ipv6
+            r'(?::\d+)?'  # optional port
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+        return re.match(regex, url) is not None
 
     def _extract_unique_directories(self, target_domain: str = None, urls: list = None):
         """
@@ -224,7 +258,6 @@ class HttpClient:
                         ptprint(f"[{response.status_code}] {response.url}", "VULN", condition=not self.args.json, indent=base_indent, clear_to_eol=True)
                         response._is_fpd_vuln = any_vuln = True
 
-
                     raw_message = match.group(0)
                     text_only = re.sub(r'<[^>]+>', '', raw_message)
                     if text_only not in printed_paths:
@@ -248,7 +281,6 @@ class HttpClient:
                     """
         except Exception as e:
             pass
-            #print(f"Error during FPD check: {e}")
 
 
     def _remap_requests_exception(self, exc):

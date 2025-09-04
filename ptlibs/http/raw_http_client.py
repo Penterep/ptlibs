@@ -23,10 +23,10 @@ Limitations:
 
 import socket
 import ssl
+import re
 import urllib.parse
 from http.client import HTTPConnection, HTTPSConnection
 from typing import Optional, Dict, Any
-
 
 class RawHttpClient:
     """
@@ -50,10 +50,15 @@ class RawHttpClient:
         data: Optional[Any] = None,
         timeout: float = 10.0,
         proxies: Optional[Dict[str, str]] = None,
+        custom_request_line: Optional[str] = None,
     ) -> 'RawHttpResponse':
         """
         Send a raw HTTP/HTTPS request with full control using http.client.
         Supports optional proxy tunneling for HTTPS using CONNECT.
+
+        If `custom_request_line` is provided, bypasses http.client's request builder
+        and sends the request line exactly as given. This allows testing of malformed
+        or non-standard HTTP requests.
 
         Args:
             url (str): Full target URL.
@@ -62,6 +67,11 @@ class RawHttpClient:
             data (Optional[Any]): Optional body as str or bytes.
             timeout (float): Timeout in seconds.
             proxies (Optional[Dict[str, str]]): Dictionary of proxies in requests-compatible format.
+            custom_request_line (Optional[str]): If set, sends this exact request line
+                instead of constructing one. Example:
+                    - "GET / FOO/1.1"
+                    - "GET / HTTP/9.8"
+                    - "FOO / HTTP/9.8"
 
         Returns:
             RawHttpResponse: Parsed HTTP response.
@@ -96,7 +106,6 @@ class RawHttpClient:
                 connect_headers = f"Host: {host}:{port}\r\n\r\n"
                 conn.sendall(connect_line.encode() + connect_headers.encode())
 
-                #response = conn.recv(4096)
                 response = self._read_until_double_crlf(conn)
                 if b"200 Connection established" not in response:
                     raise ConnectionError("Proxy tunnel failed")
@@ -127,31 +136,88 @@ class RawHttpClient:
             else:
                 request_path = path
 
-            http_conn.putrequest(method.upper(), request_path, skip_host=True)
+            if custom_request_line:
+                # Send custom / malformed request line manually
+                http_conn.sock.sendall((custom_request_line + "\r\n").encode("utf-8"))
 
-            # Only add Host header if not provided by the user (via headers)
-            if not any(k.lower() == "host" for k in (headers or {})):
-                host_header = parsed.netloc
-                http_conn.putheader("Host", host_header)
+                # Ensure Host header exists
+                headers = headers.copy() if headers else {}
+                if not any(k.lower() == "host" for k in headers):
+                    headers["Host"] = parsed.netloc
 
-            for key, value in (headers or {}).items():
-                if key.lower() != "host":
-                    http_conn.putheader(key, value)
-                else:
-                    http_conn.putheader("Host", value)
+                # Add accept-encoding header if not provided by user
+                if not any(k.lower() == "accept-encoding" for k in headers):
+                    headers["Accept-Encoding"] = "gzip, deflate, br"
 
-            if body:
-                http_conn.putheader("Content-Length", str(len(body)))
+                # Manually send headers
+                for key, value in headers.items():
+                    line = f"{key}: {value}\r\n"
+                    http_conn.sock.sendall(line.encode("utf-8"))
 
-            http_conn.endheaders()
+                if body:
+                    http_conn.sock.sendall(f"Content-Length: {len(body)}\r\n".encode("utf-8"))
 
-            if body:
-                http_conn.send(body)
+                # End of headers
+                http_conn.sock.sendall(b"\r\n")
 
-            raw_response = http_conn.getresponse()
-            response = RawHttpResponse(raw_response, url)
-            _ = response.content # Force read body to release socket before returning response
-            return response
+                # Send body
+                if body:
+                    http_conn.sock.sendall(body)
+
+
+                # Manual reading of response as raw bytes (minimal)
+                response_data = b""
+                while True:
+                    chunk = http_conn.sock.recv(4096)
+                    if not chunk:
+                        break
+                    response_data += chunk
+
+                # Parse response for custom request line
+                status, reason, resp_headers, body_bytes, http_version = self._parse_response_with_custom_request_line(response_data)
+
+                # Build RawHttpResponse with parsed values
+                response = RawHttpResponse.__new__(RawHttpResponse)
+                response.url = url
+                response.status = status
+                response.reason = reason
+                response.headers = resp_headers
+                response.method = custom_request_line.split(" ")[0]
+                response.http_version = http_version
+                response._content = body_bytes
+                response._raw_response = None
+                response.msg = None
+                return response
+
+            else:
+                # Normal path using http.client
+                http_conn.putrequest(method.upper(), request_path, skip_host=True)
+
+                if not any(k.lower() == "host" for k in (headers or {})):
+                    http_conn.putheader("Host", parsed.netloc)
+
+                for key, value in (headers or {}).items():
+                    if key.lower() != "host":
+                        http_conn.putheader(key, value)
+                    else:
+                        http_conn.putheader("Host", value)
+
+                if body:
+                    http_conn.putheader("Content-Length", str(len(body)))
+
+                http_conn.endheaders()
+
+                if body:
+                    http_conn.send(body)
+
+                raw_response = http_conn.getresponse()
+                response = RawHttpResponse(raw_response, url)
+
+                # Set method and http_version for consistency
+                response.method = method.upper()
+
+                _ = response.content # Force read body to release socket before returning response
+                return response
 
         except (socket.timeout, ssl.SSLError, OSError) as e:
             raise e
@@ -175,6 +241,62 @@ class RawHttpClient:
             buffer += chunk
         return buffer
 
+
+
+    def _parse_response_with_custom_request_line(self, response_data: bytes):
+        """
+        Parse raw HTTP response bytes for requests sent with a custom/malformed request line.
+
+        This function MUST ONLY be used for responses from `custom_request_line` requests.
+        Normal http.client responses should not use this parser.
+
+        Args:
+            response_data (bytes): Full raw response read from socket.
+
+        Returns:
+            Tuple[int, str, Dict[str, str], bytes, str]: status, reason, headers dict, body bytes, HTTP version.
+        """
+        header_end = response_data.find(b"\r\n\r\n")
+        if header_end == -1:
+            return 0, "", {}, response_data, ""
+
+        header_bytes = response_data[:header_end]
+        body_bytes = response_data[header_end + 4:]
+        lines = header_bytes.split(b"\r\n")
+        if not lines:
+            return 0, "", {}, body_bytes, ""
+
+        # Parse status line
+        status_line = lines[0].decode("utf-8", errors="replace").strip()
+        http_version = ""
+        status = 0
+        reason = ""
+
+        parts = status_line.split(" ", 2)
+        if parts:
+            if parts[0].upper().startswith("HTTP/"):
+                http_version = parts[0][5:]  # strip 'HTTP/'
+                if len(parts) > 1 and parts[1].isdigit():
+                    status = int(parts[1])
+                if len(parts) > 2:
+                    reason = parts[2]
+            else:
+                # Non-standard/malformed request line, treat method as first part
+                http_version = parts[-1] if len(parts) > 1 else ""
+                status = 0
+                reason = ""
+
+        # Parse headers
+        headers = {}
+        for line in lines[1:]:
+            decoded_line = line.decode("utf-8", errors="replace")
+            if ":" in decoded_line:
+                key, value = decoded_line.split(":", 1)
+                headers[key.lower()] = value.strip()
+
+        return status, reason, headers, body_bytes, http_version
+
+
 class RawHttpResponse:
     """
     Encapsulates a raw HTTP response from http.client with convenient access to status, headers and content.
@@ -195,11 +317,17 @@ class RawHttpResponse:
             response (http.client.HTTPResponse): The raw HTTP response.
             url (str): The requested URL.
         """
+
         self.url = url
         self.status = response.status
         self.reason = response.reason
-        self.msg = response.msg
+        # Convert http.client version integer to string
+        version_map = {9: "0.9", 10: "1.0", 11: "1.1"}
+        self.http_version = version_map.get(getattr(response, "version", 11), str(getattr(response, "version", 11)))
+
+
         self.headers = {k.lower(): v for k, v in response.getheaders()}
+        self.msg = response.msg
         self._raw_response = response
         self._content = None
 
