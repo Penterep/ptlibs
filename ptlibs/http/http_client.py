@@ -305,6 +305,8 @@ class HttpClient:
                 remap_exception(requests.exceptions.ConnectionError, "DNS error: domain name not found")
             elif "connection refused" in msg:
                 remap_exception(requests.exceptions.ConnectionError, "Connection refused by the server")
+            elif "sslerror" in msg:
+                remap_exception(requests.exceptions.ConnectionError, "SSL error occured")
             else:
                 remap_exception(requests.exceptions.ConnectionError, "Connection error occurred")
 
@@ -338,6 +340,9 @@ class HttpClient:
 
         elif isinstance(exc, requests.exceptions.RetryError):
             remap_exception(requests.exceptions.RetryError, "Max retries exceeded")
+
+        elif isinstance(exc, requests.exceptions.SSLError):
+            remap_exception(requests.exceptions.SSLError, "SSL error occured")
 
         elif isinstance(exc, requests.exceptions.RequestException):
             remap_exception(requests.exceptions.RequestException, "General HTTP request error")
