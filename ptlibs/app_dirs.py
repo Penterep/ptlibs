@@ -22,7 +22,7 @@ class AppDirs:
 
     Structure:
         <base>/
-            data/      - all persistent data (databases, reports, logs, etc.)
+            /          - all persistent data (databases, reports, logs, etc.)
             config/    - configuration files
     """
 
@@ -31,7 +31,7 @@ class AppDirs:
         home = os.path.expanduser("~")
         self.base = os.path.join(home, ".penterep", f".{self.tool_name}")
 
-        self.data_dir = os.path.join(self.base, "data")
+        self.data_dir = os.path.join(self.base)
         self.config_dir = os.path.join(self.base, "config")
 
         # Create directories if they don't exist
