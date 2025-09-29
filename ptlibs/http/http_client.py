@@ -94,8 +94,10 @@ class HttpClient:
             requests.Response: Response object from the executed HTTP request.
         """
         try:
-            if cache is None and hasattr(kwargs.get('args', None), 'cache'):
-                cache = kwargs['args'].cache
+            if cache is None:
+                if self.args is not None and hasattr(self.args, 'cache'):
+                    cache = self.args.cache
+
             final_headers = self._merge_headers(headers, merge_headers)
             timeout = timeout or self.timeout
 
