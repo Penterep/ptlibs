@@ -37,7 +37,7 @@ class HttpClient:
                 return None
 
             self.proxy = normalize_proxy(args.proxy) if hasattr(args, 'proxy') else None
-            self.timeout = getattr(self.args, 'timeout', None)
+            self.timeout = getattr(self.args, 'timeout', 10)
             self._store_urls: bool = False
             self._stored_urls = set()
             self._base_headers: dict = None
@@ -70,7 +70,7 @@ class HttpClient:
         return cls._instance
 
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = {}, timeout=None, verify=False, cache=False, dump=False, store_urls=False, merge_headers=True, **kwargs):
+    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = {}, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, **kwargs):
         """
         Send an HTTP request with support for caching.
 
@@ -94,6 +94,8 @@ class HttpClient:
             requests.Response: Response object from the executed HTTP request.
         """
         try:
+            if cache is None and hasattr(kwargs.get('args', None), 'cache'):
+                cache = kwargs['args'].cache
             final_headers = self._merge_headers(headers, merge_headers)
             timeout = timeout or self.timeout
 
