@@ -138,6 +138,12 @@ class RawHttpClient:
 
             if custom_request_line:
                 # Send custom / malformed request line manually
+                if not getattr(http_conn, "sock", None):
+                    http_conn.connect() # ensure socket exists
+
+                if not http_conn.sock:
+                    raise ConnectionError(f"Failed to establish socket to {host}:{port}")
+
                 http_conn.sock.sendall((custom_request_line + "\r\n").encode("utf-8"))
 
                 # Ensure Host header exists
@@ -240,7 +246,6 @@ class RawHttpClient:
                 break
             buffer += chunk
         return buffer
-
 
 
     def _parse_response_with_custom_request_line(self, response_data: bytes):
