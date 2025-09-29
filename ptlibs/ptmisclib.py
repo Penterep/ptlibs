@@ -19,7 +19,6 @@ from ptlibs.ptprinthelper import out_if, ptprint
 
 #from ptlibs import cachefile
 
-
 def read_file(file: str) -> list[str]:
     with open(file, "r") as f:
         domain_list = [line.strip("\n") for line in f]
@@ -66,12 +65,12 @@ def time2str(time):
 
 
 def save_object(obj: dict,  filename) -> None:
-    with open(os.path.join(tempfile.gettempdir(), "pentereptools", filename), "wb") as output_file:
+    with open(os.path.join(get_penterep_temp_dir(), filename), "wb") as output_file:
         pickle.dump(obj, output_file, pickle.HIGHEST_PROTOCOL)
 
 
 def load_object(filename) -> object:
-    with open(os.path.join(tempfile.gettempdir(), "pentereptools", filename), "rb") as input_file:
+    with open(os.path.join(get_penterep_temp_dir(), filename), "rb") as input_file:
         return pickle.load(input_file)
 
 
@@ -86,20 +85,20 @@ def exists_temp(filename: str) -> bool:
     """
 
     #check if file exists in tmp
-    if not os.path.isfile(os.path.join(tempfile.gettempdir(), "pentereptools", filename)):
+    if not os.path.isfile(os.path.join(get_penterep_temp_dir(), filename)):
         return False
 
     #check if file is created in the last day
     file_older_than_day = get_file_modification_age(filename).days > 1
     if file_older_than_day:
-        os.remove(os.path.join(tempfile.gettempdir(), "pentereptools", filename))
+        os.remove(os.path.join(get_penterep_temp_dir(), filename))
         return False
     else:
         return True
 
 
 def get_file_modification_age(filename: str) -> datetime.timedelta:
-    return (datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(tempfile.gettempdir(), "pentereptools", filename))))
+    return (datetime.datetime.now() - datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(get_penterep_temp_dir(), filename))))
 
 
 def get_temp_filename_from_url(url: str, method: str, headers: dict) -> str:
@@ -125,7 +124,7 @@ def get_response_data_dump(response: requests.models.Response) -> dict:
         return {"request": "error", "response": "error"}
 
 
-def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None) -> requests.Response:
+def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None, cookies: dict = {}) -> requests.Response:
     try:
         cookies = _get_cookies_from_headers(headers)
         response = requests.request(method, url, proxies=proxies, allow_redirects=redirects, headers=headers, verify=verify, timeout=timeout, data=data, auth=auth, cookies=cookies)
@@ -149,7 +148,7 @@ def load_url(url: str, method: str, **kwargs) -> requests.Response:
     """
     return load_url_from_web_or_temp(url, method, **kwargs)
 
-def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None) -> requests.Response:
+def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None, cookies: dict = {}) -> requests.Response:
     """Returns HTTP response from URL.
        If param <cache_request> is present, response will be saved into a temp file. If response is already saved in a temp file, it will be loaded from there.
 
@@ -165,6 +164,7 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies
         cache          (bool) : cache request-response
         dump_response  (bool) : dump request-response
         auth           (tuple[str, str]) : use HTTP authentication
+        cookies        (dict) : cookies
 
     Returns:
         default:
@@ -182,12 +182,12 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies
             obj = load_object(filename)
             return obj["response"] if not dump_response else (obj["response"], obj["response_dump"])
         else:
-            response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
+            response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth, cookies)
             response_dump = get_response_data_dump(response)
             save_object({"response": response, "response_dump": response_dump}, filename)
             return response if not dump_response else (response, response_dump)
     else:
-        response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth)
+        response = _get_response(url, method, headers, proxies, data, timeout, redirects, verify, auth, cookies)
         return response if not dump_response else (response, get_response_data_dump(response))
 
 def read_temp_dir() -> tuple[int, int]:
@@ -238,7 +238,8 @@ def clear_temp_dir() -> None:
     return True
 
 def get_penterep_temp_dir() -> str:
-    return os.path.join(tempfile.gettempdir(), "pentereptools")
+    home = os.path.expanduser("~")
+    return os.path.join(home, ".penterep", f".cache")
 
 def clean_html(input_html):
     """
