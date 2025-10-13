@@ -170,10 +170,16 @@ class PtJsonLib:
         else:
             self.json_object["results"]["properties"].update(properties)
 
-    def add_vulnerability(self, vuln_code: str, vuln_request: str=None, vuln_response: str=None, description: str=None, score: str=None, note: str=None, node_key: str=None) -> None:
+    def add_vulnerability(self, vuln_code: str, vuln_request: str=None, vuln_response: str=None, description: str=None, score: str=None, note: str=None, node_key: str=None, **kwargs) -> None:
         """Add vulnerability code to the json result, if <node_key> parameter is provided, vulnerability will be added to the specified node instead."""
-        vulnerability_dict = {k:v for k, v in locals().items() if v is not None}; vulnerability_dict.pop("self", None)
+        vulnerability_dict = {k:v for k, v in locals().items() if v is not None}
+        vulnerability_dict.pop("self", None)
+        vulnerability_dict.pop("kwargs", None)
         vulnerability_dict = self.convert_keys_to_camel_case(vulnerability_dict, keys_to_convert=["vuln_code", "vuln_request", "vuln_response"])
+
+        # Add keys from kwargs
+        for key, value in kwargs.items():
+            vulnerability_dict[key] = value
 
         if node_key:
             vulnerability_dict.pop("node_key")
