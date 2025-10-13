@@ -18,6 +18,7 @@ from ptlibs import ptdefs
 from ptlibs.ptprinthelper import out_if, ptprint
 
 #from ptlibs import cachefile
+from ptlibs.app_dirs import AppDirs
 
 def read_file(file: str) -> list[str]:
     with open(file, "r") as f:
@@ -238,8 +239,8 @@ def clear_temp_dir() -> None:
     return True
 
 def get_penterep_temp_dir() -> str:
-    home = os.path.expanduser("~")
-    return os.path.join(home, ".penterep", f".cache")
+    """Get folder for http request cache"""
+    return os.path.join(os.path.expanduser("~"), ".penterep", f"http_cache")
 
 def clean_html(input_html):
     """
