@@ -23,27 +23,30 @@ class HttpClient:
         return cls._instance
 
     def __init__(self, args=None, ptjsonlib=None):
-        if not hasattr(self, '_initialized'): # This ensures __init__ is only called once
+        # This ensures __init__ is only called once
+        if not hasattr(self, '_initialized'):
             if args is None or ptjsonlib is None:
                 raise ValueError("PtHttpClient: Error: Both 'args' and 'ptjsonlib' must be provided for init")
-            self.args = args
-            self.ptjsonlib = ptjsonlib
 
-            def normalize_proxy(raw_proxy):
-                if isinstance(raw_proxy, str):
-                    return {"http": raw_proxy, "https": raw_proxy}
-                elif isinstance(raw_proxy, dict):
-                    return raw_proxy
-                return None
+        self.args = args
+        self.ptjsonlib = ptjsonlib
 
-            self.proxy = normalize_proxy(args.proxy) if hasattr(args, 'proxy') else None
-            self.timeout = getattr(self.args, 'timeout', 10)
-            self._store_urls: bool = False
-            self._stored_urls = set()
-            self._base_headers: dict = None
-            self._initialized = True  # Flag to indicate that initialization is complete
-            self._lock = Lock()
-            self._raw_http_client: object = RawHttpClient()
+        def normalize_proxy(raw_proxy):
+            if isinstance(raw_proxy, str):
+                return {"http": raw_proxy, "https": raw_proxy}
+            elif isinstance(raw_proxy, dict):
+                return raw_proxy
+            return None
+
+        self.proxy = normalize_proxy(args.proxy) if hasattr(args, 'proxy') else None
+        self.timeout = getattr(self.args, 'timeout', 10)
+        self._store_urls: bool = False
+        self._stored_urls = set()
+        self._base_headers: dict = None
+        self._lock = Lock()
+        self._initialized = True  # Flag to indicate that initialization is complete
+        self._raw_http_client: object = RawHttpClient()
+        self.test_fpd = False # Test fpd for all requests from http client
 
     @classmethod
     def get_instance(cls, args=None, ptjsonlib=None):
@@ -69,8 +72,10 @@ class HttpClient:
             cls._instance = cls(args, ptjsonlib)
         return cls._instance
 
+    #def get(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = {}, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, **kwargs):
+    #    self.send_request(url, method="GET", headers, data, allow_redirects, cookies, timeout, verify, cache, dump, store_urls, merge_headers, **kwargs)
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = {}, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, **kwargs):
+    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False, **kwargs):
         """
         Send an HTTP request with support for caching.
 
@@ -88,49 +93,55 @@ class HttpClient:
             dump (bool, optional): If True, dumps the raw request/response for debugging.
             store_urls (bool, optional): If True, internally stores successfully requested URLs (non-404).
             merge_headers (bool, optional): If True, merges default headers with provided ``headers``.
+            test_fpd (bool, optional): If True, run FPD vulnerability test for GET request response. Defaults to False.
             **kwargs: Additional keyword arguments passed directly to ``requests.request()``.
 
         Returns:
             requests.Response: Response object from the executed HTTP request.
         """
         try:
-            if cache is None:
-                if self.args is not None and hasattr(self.args, 'cache'):
-                    cache = self.args.cache
+            if cookies is None:
+                cookies: dict = {}
+
+            if cache is None and getattr(self, "args", None) is not None:
+                cache = getattr(self.args, "cache", None)
+
+            # apply delay
+            if hasattr(self.args, 'delay') and self.args.delay > 0:
+                time.sleep(self.args.delay / 1000)  # Convert ms to seconds
+
 
             final_headers = self._merge_headers(headers, merge_headers)
-            timeout = timeout or self.timeout
-
             response = load_url_from_web_or_temp(
                 url=url,
                 method=method,
                 headers=final_headers,
                 proxies=self.proxy if self.proxy else {},
                 data=data,
-                timeout=timeout,
+                timeout=timeout or self.timeout,
                 redirects=allow_redirects,
                 verify=verify,
                 dump_response=dump,
                 cache=cache
                 )
 
-            """
-            response = requests.request(method=method, url=url, allow_redirects=allow_redirects, headers=final_headers, data=data, timeout=timeout, proxies=(self.proxy if self.proxy else {}), verify=(False if self.proxy else True))
-            """
 
-            if method.upper() == "GET":
+            test_fpd = self.test_fpd if self.test_fpd else test_fpd
+            if test_fpd and method.upper() == "GET":
                 with self._lock:
                     self._check_fpd_in_response(response)
+
 
             if self._store_urls or store_urls:
                 if response.status_code != 404:
                     with self._lock:
                         self._stored_urls.add(response.url)
 
-            if hasattr(self.args, 'delay') and self.args.delay > 0:
-                time.sleep(self.args.delay / 1000)  # Convert ms to seconds
-
-            return response
+            if isinstance(response, tuple):
+                response, dump_info = response
+                return repsonse, dump_info
+            else:
+                return response
 
         except Exception as e:
             self._remap_requests_exception(e)
