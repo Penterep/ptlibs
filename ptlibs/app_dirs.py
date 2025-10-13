@@ -21,18 +21,18 @@ class AppDirs:
     Encapsulates the writable directory for the application in the current user's home.
 
     Structure:
-        <base>/
-            /          - all persistent data (databases, reports, logs, etc.)
+        <base>/        - base directory
             config/    - configuration files
+            data/      - data files
     """
 
     def __init__(self, tool_name: str):
         self.tool_name = tool_name.lower()
         home = os.path.expanduser("~")
-        self.base = os.path.join(home, ".penterep", f".{self.tool_name}")
-
-        self.data_dir = os.path.join(self.base)
+        self.base = os.path.join(home, ".penterep", f"{self.tool_name}")
+        self.data_dir = os.path.join(self.base, "data")
         self.config_dir = os.path.join(self.base, "config")
+        self.http_cache = os.path.join(home, ".penterep", f"http_cache")
 
         # Create directories if they don't exist
         for path in [self.data_dir, self.config_dir]:
@@ -60,3 +60,6 @@ class AppDirs:
 
     def get_config_dir(self) -> str:
         return self.config_dir
+
+    def get_request_cache_dir(self) -> str:
+        return self.http_cache
