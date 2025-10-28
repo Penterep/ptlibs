@@ -126,7 +126,7 @@ def get_response_data_dump(response: requests.models.Response) -> dict:
         return {"request": "error", "response": "error"}
 
 
-def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None, cookies: dict = {}, max_retries: int = 10, params=None) -> requests.Response:
+def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None, cookies: dict = {}, max_retries: int = 2, params=None) -> requests.Response:
     for attempt in range(0, max_retries + 1):
         try:
             cookies = _get_cookies_from_headers(headers)
@@ -151,7 +151,7 @@ def load_url(url: str, method: str, **kwargs) -> requests.Response:
     """
     return load_url_from_web_or_temp(url, method, **kwargs)
 
-def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None, cookies: dict = {}, max_retries: int = 10, params=None) -> requests.Response:
+def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None, cookies: dict = {}, max_retries: int = 2, params=None) -> requests.Response:
     """Returns HTTP response from URL.
        If param <cache_request> is present, response will be saved into a temp file. If response is already saved in a temp file, it will be loaded from there.
 

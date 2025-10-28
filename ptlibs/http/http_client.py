@@ -72,7 +72,7 @@ class HttpClient:
             cls._instance = cls(args, ptjsonlib)
         return cls._instance
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, params=None, proxies=None, max_retries: int = 10, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False):
+    def send_request(self, url, method="GET", *, headers=None, data=None, params=None, proxies=None, max_retries: int = 2, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False):
         """
         Send an HTTP request with support for caching.
 
