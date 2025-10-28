@@ -72,10 +72,7 @@ class HttpClient:
             cls._instance = cls(args, ptjsonlib)
         return cls._instance
 
-    #def get(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = {}, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, **kwargs):
-    #    self.send_request(url, method="GET", headers, data, allow_redirects, cookies, timeout, verify, cache, dump, store_urls, merge_headers, **kwargs)
-
-    def send_request(self, url, method="GET", *, headers=None, data=None, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False, **kwargs):
+    def send_request(self, url, method="GET", *, headers=None, data=None, params=None, proxies=None, max_retries: int = 10, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False):
         """
         Send an HTTP request with support for caching.
 
@@ -100,6 +97,7 @@ class HttpClient:
             requests.Response: Response object from the executed HTTP request.
         """
         try:
+
             if cookies is None:
                 cookies: dict = {}
 
@@ -122,7 +120,10 @@ class HttpClient:
                 redirects=allow_redirects,
                 verify=verify,
                 dump_response=dump,
-                cache=cache
+                cache=cache,
+                max_retries=max_retries,
+                params=params,
+                cookies=cookies,
                 )
 
 

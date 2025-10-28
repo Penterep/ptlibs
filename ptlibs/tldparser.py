@@ -21,7 +21,6 @@ class TLDParseResult:
     def get_domain(self):
        return ''.join(part for part in [self.subdomain, self.domain, self.suffix] if part)
 
-
 def extract(url_or_domain: str) -> TLDParseResult:
     return parse(url_or_domain)
 

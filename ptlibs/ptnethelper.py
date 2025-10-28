@@ -9,7 +9,6 @@ import requests
 from ptlibs import ptdefs
 from ptlibs.ptprinthelper import ptprint, out_if
 
-
 def randomIP() -> str:
     ip = ''
     ip += str(random.randint(1, 255))   # first octet

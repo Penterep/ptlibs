@@ -75,7 +75,7 @@ def ptprint(string: str, bullet_type="TEXT", condition=None, end="\n", flush=Fal
         print(string, end=end, flush=flush)
 
         if filehandle:
-            string = re.sub("\033\[\d+m", "", string)
+            string = re.sub(r"\033\[\d+m", "", string)
             filehandle.write(string.lstrip()+end)
 
 
@@ -141,7 +141,7 @@ def ptprint_(string: str, end="\n", flush=False, clear_to_eol=False, filehandle=
             string = string + (' ' * (terminal_width() - len_string_without_colors(string)))
         print(string, end=end, flush=flush)
         if filehandle:
-                string = re.sub("\033\[\d+m", "", string)
+                string = re.sub(r"\033\[\d+m", "", string)
                 filehandle.write(string.lstrip()+end)
 
 
@@ -149,8 +149,15 @@ def add_spaces_to_eon(string: str, minus=0, condition=False) -> str:
     if condition:
         return string
     else:
+        prefix_len = 33 # increase about 3 dots
+        max_len = terminal_width() - minus
+        str_len = len_string_without_colors(string)
+        if max_len < str_len:
+            prefix = string[:prefix_len - 3]
+            suffix_len = max_len - prefix_len
+            suffix = string[-suffix_len:] if suffix_len > 0 else ""
+            return f"{prefix}...{suffix}"
         return string + (' ' * (terminal_width() - len_string_without_colors(string) - minus))
-
 
 def terminal_width() -> int:
     return terminal_size()[0]

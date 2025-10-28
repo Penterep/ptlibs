@@ -2,6 +2,9 @@ import sys
 import os
 import signal
 
+from ptlibs.dns_cache_hosts import install_dns_cache
+install_dns_cache()
+
 from ptlibs.ptprinthelper import ptprint, out_if
 
 def signal_handler(sig, frame):
@@ -13,3 +16,5 @@ def signal_handler(sig, frame):
 
 # Register the signal handler for SIGINT
 signal.signal(signal.SIGINT, signal_handler)
+
+
