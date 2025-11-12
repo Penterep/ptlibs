@@ -126,7 +126,7 @@ class HttpRequestParser():
         result_nodes = sorted(result_nodes, key=lambda x: x['type'])
         return result_nodes
 
-    def parse_http_request(self, http_request: Union[str, TextIO, List[str]]) -> tuple:
+    def parse_http_request(self, http_request: Union[str, TextIO, List[str]], scheme: str = "http") -> tuple:
         """Parse the provided HTTP request input.
 
         Args:
@@ -157,7 +157,7 @@ class HttpRequestParser():
 
             # Construct URL based on path
             if self._host:
-                url = f"https://{self._host}{path}"
+                url = f"{scheme}://{self._host}{path}"
             else:
                 self.ptjsonlib.end_error("Host header is missing in the request file", self.use_json)
 
