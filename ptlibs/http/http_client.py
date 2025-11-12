@@ -42,7 +42,7 @@ class HttpClient:
         self.timeout = getattr(self.args, 'timeout', 10)
         self._store_urls: bool = False
         self._stored_urls = set()
-        self._base_headers: dict = None
+        self._base_headers: dict = args.headers
         self._lock = Lock()
         self._initialized = True  # Flag to indicate that initialization is complete
         self._raw_http_client: object = RawHttpClient()
@@ -97,7 +97,6 @@ class HttpClient:
             requests.Response: Response object from the executed HTTP request.
         """
         try:
-
             if cookies is None:
                 cookies: dict = {}
 
@@ -107,8 +106,6 @@ class HttpClient:
             # apply delay
             if hasattr(self.args, 'delay') and self.args.delay > 0:
                 time.sleep(self.args.delay / 1000)  # Convert ms to seconds
-
-
             final_headers = self._merge_headers(headers, merge_headers)
             response = load_url_from_web_or_temp(
                 url=url,
