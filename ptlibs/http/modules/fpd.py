@@ -44,6 +44,7 @@ def find_fpd(response, error_patterns=None):
         ]
 
     results = []
+    merged_results = {}
     chain = list(response.history) + [response]
     
     path_extractor = r"([a-zA-Z]:\\(?:[^\\\s]+\\)*[^\s]+|/(?:[\w.-]+/)*[\w.-]+)"
