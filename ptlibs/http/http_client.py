@@ -24,9 +24,11 @@ class HttpClient:
 
     def __init__(self, args=None, ptjsonlib=None):
         # This ensures __init__ is only called once
-        if not hasattr(self, '_initialized'):
-            if args is None or ptjsonlib is None:
-                raise ValueError("PtHttpClient: Error: Both 'args' and 'ptjsonlib' must be provided for init")
+        if hasattr(self, '_initialized'):
+            return
+
+        if args is None or ptjsonlib is None:
+            raise ValueError("PtHttpClient: Error: Both 'args' and 'ptjsonlib' must be provided for init")
 
         self.args = args
         self.ptjsonlib = ptjsonlib
@@ -42,7 +44,7 @@ class HttpClient:
         self.timeout = getattr(self.args, 'timeout', 10)
         self._store_urls: bool = False
         self._stored_urls = set()
-        self._base_headers: dict = args.headers
+        self._base_headers: dict = getattr(self.args, 'headers', {})
         self._lock = Lock()
         self._initialized = True  # Flag to indicate that initialization is complete
         self._raw_http_client: object = RawHttpClient()
@@ -72,7 +74,7 @@ class HttpClient:
             cls._instance = cls(args, ptjsonlib)
         return cls._instance
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, params=None, proxies=None, max_retries: int = 2, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False):
+    def send_request(self, url, method="GET", *, headers=None, data=None, params=None, proxies=None, max_retries: int = 2, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False, verbose=True, **kwargs):
         """
         Send an HTTP request with support for caching.
 
@@ -121,13 +123,14 @@ class HttpClient:
                 max_retries=max_retries,
                 params=params,
                 cookies=cookies,
+                **kwargs
                 )
 
 
             test_fpd = self.test_fpd if self.test_fpd else test_fpd
             if test_fpd and method.upper() == "GET":
                 with self._lock:
-                    self._check_fpd_in_response(response)
+                    self._check_fpd_in_response(response, verbose)
 
 
             if self._store_urls or store_urls:
@@ -137,7 +140,7 @@ class HttpClient:
 
             if isinstance(response, tuple):
                 response, dump_info = response
-                return repsonse, dump_info
+                return response, dump_info
             else:
                 return response
 
@@ -221,7 +224,6 @@ class HttpClient:
         If target_domain is specified, only URLs matching the domain are processed.
         If urls are provided, they are used instead of self._stored_urls.
         """
-
         unique_directories = set()
         urls = urls or self._stored_urls  # Use provided URLs or fallback to stored ones
         for url in self._stored_urls:
@@ -239,7 +241,7 @@ class HttpClient:
         return sorted(list(unique_directories))  # Sort for consistency
 
 
-    def _check_fpd_in_response(self, response, *, base_indent=4):
+    def _check_fpd_in_response(self, response, verbose=True, *, base_indent=4):
         """
         Checks the given HTTP response for Full Path Disclosure (FPD) errors.
 
@@ -257,6 +259,8 @@ class HttpClient:
             r"<b>Notice</b>: .* on line.*",
             #r"(<b>)?Uncaught Exception(</b>)?: [.\s]* on line.*",
             #r"(?:in\s+)([a-zA-Z]:\\[\\\w.-]+|\/[\w.\/-]+)",  # Windows or Unix full file paths
+            r"Fatal error:\s.*?in\s+\/[\w\/\.-]+:\d+",
+            r"Uncaught .*? in\s+\/[\w\/\.-]+:\d+",
         ]
         path_extractor = r"(in\s+(?:[a-zA-Z]:\\[^\s]+|/[\w./\-_]+))"
 
@@ -274,7 +278,7 @@ class HttpClient:
                     raw_message = match.group(0)
                     text_only = re.sub(r'<[^>]+>', '', raw_message)
                     if text_only not in printed_paths:
-                        ptprint(f"{get_colored_text(text_only, 'ADDITIONS')}", "TEXT", condition=not self.args.json, indent=base_indent * 2, clear_to_eol=True)
+                        ptprint(f"{get_colored_text(text_only, 'ADDITIONS')}", "TEXT", condition=(not self.args.json and verbose), indent=base_indent * 2, clear_to_eol=True)
                         printed_paths.add(text_only)
 
                     """
