@@ -45,26 +45,29 @@ def find_fpd(response, error_patterns=None):
     chain = list(response.history) + [response]
     
     path_extractor = r"([a-zA-Z]:\\(?:[^\\\s]+\\)*[^\s]+|/(?:[\w.-]+/)*[\w.-]+)"
-
+   
     for resp in chain:
         url = resp.url
         text = getattr(resp, "text", "") or ""
         found = set()
 
-        # iterate over all patterns
         for pattern in error_patterns:
             for match in re.finditer(pattern, text):
                 raw = match.group(0)
                 clean = re.sub(r'<[^>]+>', '', raw)
-
-                # try to extract actual "in /path/file.php"
                 pm = re.search(path_extractor, clean)
                 if pm:
                     fp = pm.group(1)
                 else:
                     fp = clean.strip()
-
                 found.add(fp)
+
+        if found:
+            if url in merged_results:
+                merged_results[url].update(found)
+            else:
+                merged_results[url] = found
+
 
         if found:
             results.append({url: sorted(found)})
