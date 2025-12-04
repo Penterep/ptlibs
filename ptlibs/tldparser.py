@@ -67,6 +67,7 @@ def _parse_full_domain(domain: str, suffix: str):
 def get_suffix(url_or_domain) -> str:
     """Retrieve the TLD/suffix from a URL or domain using the Public Suffix List."""
     suffix_list = _get_public_suffix_list()
+    suffix_list.append(".loc")
     result = [suffix for suffix in suffix_list if url_or_domain.endswith(suffix)]
     result = sorted(result, key=len, reverse=True)
     return result[0].lstrip(".") if result else ""
