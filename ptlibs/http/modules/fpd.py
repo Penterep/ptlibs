@@ -1,3 +1,5 @@
+import re
+
 def find_fpd(response, error_patterns=None):
     r"""
     Scan the full redirect chain of a response for Full Path Disclosure (FPD) errors.
@@ -36,7 +38,7 @@ def find_fpd(response, error_patterns=None):
             r"(?:<b>)Fatal error(?:</b>)?: .* on line.*",
             r"(?:<b>)Error<(?:</b>)?: .* on line.*",
             r"(?:<b>)Notice(?:</b>)?: .* on line.*",
-            r"(?:<b>)Uncaught Exception(?:</b>))?: [.\s]* on line.*",
+            r"(?:<b>)Uncaught Exception(?:</b>)?: [.\s]* on line.*",
             r"Fatal error:\s.*?in\s+\/[\w\/\.-]+:\d+",
             r"Uncaught .*? in\s+\/[\w\/\.-]+:\d+",
         ]
