@@ -11,6 +11,11 @@ class ArrayLock:
         array.append(item)
         self.lock.release()
 
+    def lock_array_extend(self, array: list, items: list) -> None:
+        self.lock.acquire()
+        array.extend(items)
+        self.lock.release()
+
     def lock_array_remove(self, array: list, item) -> None:
         self.lock.acquire()
         array.remove(item)
