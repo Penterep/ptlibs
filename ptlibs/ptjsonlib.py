@@ -217,10 +217,10 @@ class PtJsonLib:
     def end_error(self, message, condition, details=None):
         ptprint( out_ifnot(f"Error: {message}", "ERROR", condition) )
         if details:
-            ptprint("    " + out_ifnot(f"{get_colored_text(details, 'ADDITIONS')}", "TEXT", condition))
+            ptprint(out_ifnot(f"    {get_colored_text(details, 'ADDITIONS')}", "TEXT", condition))
         self.set_status("error", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
-        sys.stdout.write("\033[?25h") # Show cursor if not shown for any reason
+        sys.stderr.write("\033[?25h") # Show cursor if not shown for any reason
         sys.stdout.flush()
         os._exit(1)
 
@@ -228,6 +228,6 @@ class PtJsonLib:
         ptprint( out_ifnot(message, bullet_type, condition) )
         self.set_status("finished", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
-        sys.stdout.write("\033[?25h") # Show cursor if not shown for any reason
+        sys.stderr.write("\033[?25h") # Show cursor if not shown for any reason
         sys.stdout.flush()
         os._exit(1)
