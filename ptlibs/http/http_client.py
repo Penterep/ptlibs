@@ -108,12 +108,13 @@ class HttpClient:
             # apply delay
             if hasattr(self.args, 'delay') and self.args.delay > 0:
                 time.sleep(self.args.delay / 1000)  # Convert ms to seconds
+
             final_headers = self._merge_headers(headers, merge_headers)
             response = load_url_from_web_or_temp(
                 url=url,
                 method=method,
                 headers=final_headers,
-                proxies=self.proxy if self.proxy else {},
+                proxies=proxies if proxies else self.proxy if self.proxy else {},
                 data=data,
                 timeout=timeout or self.timeout,
                 redirects=allow_redirects,
