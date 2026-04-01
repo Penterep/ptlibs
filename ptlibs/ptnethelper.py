@@ -59,7 +59,7 @@ def get_request_headers(args) -> dict:
             request_headers.update({"Cookie": args.cookie})
     if vars(args).get("headers"):
         for header in args.headers:
-            request_headers.update({header.split(":")[0]: header.split(":")[1]})
+            request_headers.update({header.split(":")[0].lstrip(): header.split(":")[1].lstrip()})
     return request_headers
 
 
