@@ -9,7 +9,7 @@ from ptlibs.http.raw_http_client import RawHttpClient
 from ptlibs.ptprinthelper import ptprint, get_colored_text
 from ptlibs import ptprinthelper
 
-from ptlibs.ptmisclib import load_url_from_web_or_temp
+from ptlibs.ptmisclib import load_url_from_web_or_temp, resolve_random_user_agent
 
 import requests; requests.packages.urllib3.disable_warnings()
 
@@ -74,7 +74,7 @@ class HttpClient:
             cls._instance = cls(args, ptjsonlib)
         return cls._instance
 
-    def send_request(self, url, method="GET", *, headers=None, data=None, params=None, proxies=None, max_retries: int = 2, allow_redirects=True, cookies: dict = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False, verbose=True, **kwargs):
+    def send_request(self, url, method="GET", *, headers=None, data=None, params=None, proxies=None, max_retries: int = 2, allow_redirects=True, cookies: dict | None = None, timeout=None, verify=False, cache=None, dump=False, store_urls=False, merge_headers=True, test_fpd=False, verbose=True, **kwargs):
         """
         Send an HTTP request with support for caching.
 
@@ -99,9 +99,6 @@ class HttpClient:
             requests.Response: Response object from the executed HTTP request.
         """
         try:
-            if cookies is None:
-                cookies: dict = {}
-
             if cache is None and getattr(self, "args", None) is not None:
                 cache = getattr(self.args, "cache", None)
 
@@ -196,16 +193,26 @@ class HttpClient:
     def _merge_headers(self, headers: dict | None, merge: bool) -> dict:
         """
         Merge base headers with user-provided headers based on the merge flag.
+        Header names are matched case-insensitively when request headers
+        override base headers.
+        If the resulting User-Agent value is 'random' (case-insensitive), it is
+        replaced with a randomly selected entry from the user agents list.
 
         Args:
             headers (dict | None): Headers provided during the request.
             merge (bool): If True, combine base headers with user headers.
 
         Returns:
+            dict: Final headers with User-Agent resolved if set to 'random'.
         """
-        if merge:
-            return {**(self._base_headers or {}), **(headers or {})}
-        return headers or {}
+        final_headers = dict(self._base_headers or {}) if merge else {}
+        for key, value in (headers or {}).items():
+            existing_key = next((h for h in final_headers if h.lower() == key.lower()), None)
+            if existing_key is not None:
+                del final_headers[existing_key]
+            final_headers[key] = value
+
+        return resolve_random_user_agent(final_headers)
 
     def is_valid_url(self, url):
         # A basic regex to validate the URL format

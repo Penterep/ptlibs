@@ -2,6 +2,7 @@ import argparse
 from hashlib import sha256
 from http.cookies import SimpleCookie
 import datetime
+import random
 import time
 import os
 import pickle
@@ -20,6 +21,9 @@ from ptlibs.ptprinthelper import out_if, ptprint
 
 #from ptlibs import cachefile
 from ptlibs.app_dirs import AppDirs
+
+_USER_AGENTS: list[str] | None = None
+
 
 def read_file(file: str) -> list[str]:
     with open(file, "r") as f:
@@ -126,10 +130,42 @@ def get_response_data_dump(response: requests.models.Response) -> dict:
         return {"request": "error", "response": "error"}
 
 
-def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None, cookies: dict = {}, max_retries: int = 2, params=None, **kwargs) -> requests.Response:
+def _find_header_key(headers: dict | None, header_name: str) -> str | None:
+    if not headers:
+        return None
+    return next((key for key in headers if key.lower() == header_name.lower()), None)
+
+
+def _load_user_agents() -> list[str]:
+    ua_file = os.path.join(os.path.dirname(__file__), "data", "user_agents.txt")
+    try:
+        with open(ua_file, "r", encoding="utf-8") as file:
+            agents = [line.strip() for line in file if line.strip()]
+            return agents if agents else ["Penterep Tools"]
+    except Exception:
+        return ["Penterep Tools"]
+
+
+def _get_user_agents() -> list[str]:
+    global _USER_AGENTS
+    if _USER_AGENTS is None:
+        _USER_AGENTS = _load_user_agents()
+    return _USER_AGENTS
+
+
+def resolve_random_user_agent(headers: dict | None) -> dict:
+    final_headers = dict(headers or {})
+    user_agent_key = _find_header_key(final_headers, "User-Agent")
+    if user_agent_key and str(final_headers[user_agent_key]).strip().lower() == "random":
+        final_headers[user_agent_key] = random.choice(_get_user_agents())
+    return final_headers
+
+
+def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, auth: tuple[str, str] = None, cookies: dict | None = None, max_retries: int = 2, params=None, **kwargs) -> requests.Response:
     for attempt in range(0, max_retries + 1):
         try:
-            cookies = _get_cookies_from_headers(headers)
+            if cookies is None:
+                cookies = _get_cookies_from_headers(headers)
             return requests.request(method, url, proxies=proxies, allow_redirects=redirects, headers=headers, verify=verify, timeout=timeout, data=data, auth=auth, cookies=cookies, params=params, **kwargs)
         except requests.exceptions.RequestException as error:
             if attempt < max_retries:
@@ -138,10 +174,11 @@ def _get_response(url: str, method: str, headers: dict, proxies: dict, data: dic
                 raise error
 
 def _get_cookies_from_headers(headers: dict) -> dict | None:
-    if "Cookie" not in headers:
+    cookie_key = _find_header_key(headers, "Cookie")
+    if not cookie_key:
         return None
     cookies_object = SimpleCookie()
-    cookies_object.load(headers["Cookie"])
+    cookies_object.load(headers[cookie_key])
     cookies = {key: morsel.value for key, morsel in cookies_object.items()}
     return cookies
 
@@ -151,7 +188,7 @@ def load_url(url: str, method: str, **kwargs) -> requests.Response:
     """
     return load_url_from_web_or_temp(url, method, **kwargs)
 
-def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None, cookies: dict = {}, max_retries: int = 2, params=None, **kwargs) -> requests.Response:
+def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies: dict = {}, data: dict = None, timeout: int = None, redirects: bool = False, verify: bool = False, cache: bool = False, dump_response: bool = False, auth: tuple[str, str] = None, cookies: dict | None = None, max_retries: int = 2, params=None, **kwargs) -> requests.Response:
     """Returns HTTP response from URL.
        If param <cache_request> is present, response will be saved into a temp file. If response is already saved in a temp file, it will be loaded from there.
 
@@ -175,6 +212,8 @@ def load_url_from_web_or_temp(url: str, method: str, headers: dict = {}, proxies
         with dump_response:
             tuple: ( response: requests.Response, request_dump: dict )
     """
+    headers = resolve_random_user_agent(headers)
+
     if cache:
         # Create penterep dir in tmp if not present
         if not os.path.exists(get_penterep_temp_dir()):
@@ -268,5 +307,3 @@ def get_tlds():
     path_to_tld = os.path.join(os.path.dirname(__file__), 'data', 'iana_tlds.txt')
     tlds = {line.strip() for line in open(path_to_tld) if len(line.strip().split()) == 1}
     return tlds
-
-
