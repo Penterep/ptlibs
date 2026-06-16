@@ -1,6 +1,5 @@
 import os
 import re
-import tempfile
 
 from dataclasses import dataclass
 from functools import lru_cache
@@ -86,26 +85,27 @@ def parse_schemeless_url_correctly(url) -> urllib.parse.ParseResult:
 
 @lru_cache(maxsize=None)
 def _get_public_suffix_list() -> list:
-    """Load the Public Suffix List (PSL) from a temporary file, or download it if not present."""
+    """Load the bundled Public Suffix List (PSL), or download it if not present."""
     try:
-        return _load_psl_from_tmp()
+        return _load_psl_from_data()
     except FileNotFoundError:
-        suffix_list = _download_psl()
-        with open(os.path.join(tempfile.gettempdir(), "PSL.txt"), "w") as file:
-            file.write("\n".join(suffix_list))
-        return suffix_list
+        return _download_psl()
 
 @lru_cache(maxsize=None)
-def _load_psl_from_tmp() -> list:
-    """Load the PSL from a temporary file."""
-    with open(os.path.join(tempfile.gettempdir(), "PSL.txt"), "r") as file:
+def _load_psl_from_data() -> list:
+    """Load the bundled PSL from package data."""
+    with open(os.path.join(os.path.dirname(__file__), "data", "PSL.txt"), "r") as file:
         return [line.strip() for line in file if line.strip() and not line.startswith("//")]
 
 @lru_cache(maxsize=None)
 def _download_psl() -> list:
     """Download the PSL from the official Public Suffix List site."""
-    response = requests.get("https://publicsuffix.org/list/public_suffix_list.dat")
+    try:
+        response = requests.get("https://publicsuffix.org/list/public_suffix_list.dat", timeout=10)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Failed to download the Public Suffix List: {e}") from None
+
     if response.status_code == 200:
         return ["." + line.strip() for line in response.text.split("\n") if line.strip() and not line.startswith("//")]
     else:
-        raise Exception("Failed to download the Public Suffix List")
+        raise RuntimeError(f"Failed to download the Public Suffix List: HTTP {response.status_code}")
