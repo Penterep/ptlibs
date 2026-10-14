@@ -18,11 +18,21 @@ class PtJsonLib:
             "status": status,
             "message": "",
             "results": {
+                "log": "",
                 "nodes": [],
                 "properties": {},
                 "vulnerabilities": []
             }
         }
+
+    def add_to_log(self, log: str) -> None:
+        """Append a line to results.log; separate entries with \\r\\n."""
+        results = self.json_object["results"]
+        current = results.get("log", "")
+        if current:
+            results["log"] = current + "\r\n" + log
+        else:
+            results["log"] = log
 
     def set_guid(self, guid: str) -> None:
         self.json_object["guid"] = guid
@@ -170,14 +180,39 @@ class PtJsonLib:
         else:
             self.json_object["results"]["properties"].update(properties)
 
-    def add_vulnerability(self, vuln_code: str, vuln_request: str=None, vuln_response: str=None, description: str=None, score: str=None, note: str=None, node_key: str=None, **kwargs) -> None:
-        """Add vulnerability code to the json result, if <node_key> parameter is provided, vulnerability will be added to the specified node instead."""
-        vulnerability_dict = {k:v for k, v in locals().items() if v is not None}
+    def add_vulnerability(
+        self,
+        vuln_code: str,
+        vuln_request: str = None,
+        vuln_response: str = None,
+        description: str = None,
+        score: str = None,
+        note: str = None,
+        poc: str = None,
+        node_key: str = None,
+        **kwargs,
+    ) -> None:
+        """Add a vulnerability to results (or to a node when ``node_key`` is set).
+
+        ``poc`` holds proof of concept — typically the exchange that proves the
+        finding, e.g. ``"Send: ...\\r\\nReceive: ..."``.
+
+        Example::
+
+            self.ptjsonlib.add_vulnerability(
+                vuln_code="PTV-SVC-SMTP-ROLE",
+                poc="Send: RCPT TO:<postmaster@example.com>\\r\\n"
+                    "Receive: 250 2.1.5 Ok",
+            )
+        """
+        vulnerability_dict = {k: v for k, v in locals().items() if v is not None}
         vulnerability_dict.pop("self", None)
         vulnerability_dict.pop("kwargs", None)
-        vulnerability_dict = self.convert_keys_to_camel_case(vulnerability_dict, keys_to_convert=["vuln_code", "vuln_request", "vuln_response"])
+        vulnerability_dict = self.convert_keys_to_camel_case(
+            vulnerability_dict,
+            keys_to_convert=["vuln_code", "vuln_request", "vuln_response"],
+        )
 
-        # Add keys from kwargs
         for key, value in kwargs.items():
             vulnerability_dict[key] = value
 
@@ -219,6 +254,16 @@ class PtJsonLib:
         if details:
             ptprint(out_ifnot(f"    {get_colored_text(details, 'ADDITIONS')}", "TEXT", condition))
         self.set_status("error", message)
+        ptprint( out_if(self.get_result_json(), None, condition) )
+        sys.stderr.write("\033[?25h") # Show cursor if not shown for any reason
+        sys.stdout.flush()
+        os._exit(1)
+
+    def end_ignore(self, message, condition, details=None):
+        ptprint( out_ifnot(f"Ignored: {message}", "WARNING", condition) )
+        if details:
+            ptprint(out_ifnot(f"    {get_colored_text(details, 'ADDITIONS')}", "TEXT", condition))
+        self.set_status("ignored", message)
         ptprint( out_if(self.get_result_json(), None, condition) )
         sys.stderr.write("\033[?25h") # Show cursor if not shown for any reason
         sys.stdout.flush()
