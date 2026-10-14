@@ -43,7 +43,8 @@ class WorkflowResult:
 
 def execute_workflow(workflow, variables: dict = None, ptjsonlib: object = None, http_client: object = None,
                       use_json: bool = False, method_override: Optional[str] = None,
-                      extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None) -> WorkflowResult:
+                      extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None,
+                      default_allow_redirects: Optional[bool] = None) -> WorkflowResult:
     """Load (if needed) and run every step of a workflow, in order.
 
     workflow is either the already-loaded step list (see load_workflow() - handing this
@@ -63,6 +64,13 @@ def execute_workflow(workflow, variables: dict = None, ptjsonlib: object = None,
     extra_headers applies to every step, since it represents state (e.g. a cookie) the
     caller already holds and a real client would present on every request.
 
+    Redirect handling, highest precedence first (see send_request): an explicit
+    allow_redirects override (last step only) > the step's own "redirect" key (any
+    step) > default_allow_redirects, the ambient default such as a -r/--redirects
+    switch (last step only) > the http client's own default. A step can thus pin its
+    redirect behavior in the workflow file regardless of -r, while a caller that is
+    specifically testing redirect behavior can still force it.
+
     Returns a WorkflowResult: .variables is every value extracted along the way (not
     just the last step's), and .steps is each step's own StepResult (including its raw
     response) for callers that need more than what regex extraction captured - e.g.
@@ -80,6 +88,7 @@ def execute_workflow(workflow, variables: dict = None, ptjsonlib: object = None,
             method_override=method_override if is_last else None,
             extra_headers=extra_headers,
             allow_redirects=allow_redirects if is_last else None,
+            default_allow_redirects=default_allow_redirects if is_last else None,
         )
         variables.update(result.variables)
         step_results.append(result)
@@ -89,7 +98,8 @@ def execute_workflow(workflow, variables: dict = None, ptjsonlib: object = None,
 
 def execute_step(step: dict, variables: dict, ptjsonlib: object = None, http_client: object = None,
                   use_json: bool = False, method_override: Optional[str] = None,
-                  extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None) -> StepResult:
+                  extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None,
+                  default_allow_redirects: Optional[bool] = None) -> StepResult:
     """Run one workflow step and return the variables extracted from its result via step["regex"],
     plus (for a "send_request" step) the raw requests.Response, for callers that need to inspect
     it directly (status code, cookies, redirect history, ...) beyond what regex extraction covers.
@@ -109,7 +119,8 @@ def execute_step(step: dict, variables: dict, ptjsonlib: object = None, http_cli
 
     if action == "send_request":
         response = send_request(step, variables, ptjsonlib=ptjsonlib, http_client=http_client, use_json=use_json,
-                                 method_override=method_override, extra_headers=extra_headers, allow_redirects=allow_redirects)
+                                 method_override=method_override, extra_headers=extra_headers, allow_redirects=allow_redirects,
+                                 default_allow_redirects=default_allow_redirects)
         raw_text = _raw_response_text(response)
     else:
         raise ValueError(f"Unknown workflow action: {action!r}")
@@ -119,14 +130,19 @@ def execute_step(step: dict, variables: dict, ptjsonlib: object = None, http_cli
 
 def send_request(step: dict, variables: dict, ptjsonlib: object = None, http_client: object = None,
                   use_json: bool = False, method_override: Optional[str] = None,
-                  extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None):
+                  extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None,
+                  default_allow_redirects: Optional[bool] = None):
     """Send the raw HTTP request described by a "send_request" step, with {{name}} placeholders
     in step["content"] filled in from variables, and return the resulting requests.Response.
 
     method_override, if given, replaces the parsed HTTP method (only the verb changes -
     the body/headers are still sent as templated). extra_headers, if given, is merged over
-    the parsed headers (it wins on a name clash). allow_redirects, if not None, is passed
-    through to http_client.send_request (otherwise its own default applies).
+    the parsed headers (it wins on a name clash).
+
+    Whether redirects are followed is decided, highest precedence first: an explicit
+    allow_redirects override > the step's own "redirect" key (JSON bool, alongside
+    "schema") > default_allow_redirects (the ambient default, e.g. a -r switch). When
+    none of these is set, http_client.send_request's own default applies.
     """
     schema = step.get("schema", "https")
     content = substitute_variables(step["content"], variables)
@@ -136,7 +152,14 @@ def send_request(step: dict, variables: dict, ptjsonlib: object = None, http_cli
     if extra_headers:
         headers = {**headers, **extra_headers}
 
-    kwargs = {} if allow_redirects is None else {"allow_redirects": allow_redirects}
+    if allow_redirects is not None:
+        effective_redirects = allow_redirects
+    elif "redirect" in step:
+        effective_redirects = bool(step["redirect"])
+    else:
+        effective_redirects = default_allow_redirects
+
+    kwargs = {} if effective_redirects is None else {"allow_redirects": effective_redirects}
     return http_client.send_request(url=url, method=method_override or method, headers=headers, data=data or None, **kwargs)
 
 
