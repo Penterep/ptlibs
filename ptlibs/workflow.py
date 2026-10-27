@@ -13,16 +13,23 @@ Public functions:
     execute_workflow(workflow, variables, ptjsonlib, http_client) -> WorkflowResult
     execute_step(step, variables, ptjsonlib, http_client) -> StepResult
     send_request(step, variables, ptjsonlib, http_client) -> requests.Response
+    get_data_from_email(email_config) -> str
     load_workflow(workflow_file) -> list
 """
 
 import base64
 import binascii
+import email
+import imaplib
 import json
 import os
+import poplib
 import re
+import time
 from dataclasses import dataclass
+from email.header import decode_header
 from typing import Optional
+from urllib.parse import urlparse
 
 from ptlibs.parsers.http_request_parser import HttpRequestParser
 
@@ -44,7 +51,7 @@ class WorkflowResult:
 def execute_workflow(workflow, variables: dict = None, ptjsonlib: object = None, http_client: object = None,
                       use_json: bool = False, method_override: Optional[str] = None,
                       extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None,
-                      default_allow_redirects: Optional[bool] = None) -> WorkflowResult:
+                      default_allow_redirects: Optional[bool] = None, email_config: Optional[dict] = None) -> WorkflowResult:
     """Load (if needed) and run every step of a workflow, in order.
 
     workflow is either the already-loaded step list (see load_workflow() - handing this
@@ -89,6 +96,7 @@ def execute_workflow(workflow, variables: dict = None, ptjsonlib: object = None,
             extra_headers=extra_headers,
             allow_redirects=allow_redirects if is_last else None,
             default_allow_redirects=default_allow_redirects if is_last else None,
+            email_config=email_config,
         )
         variables.update(result.variables)
         step_results.append(result)
@@ -99,7 +107,7 @@ def execute_workflow(workflow, variables: dict = None, ptjsonlib: object = None,
 def execute_step(step: dict, variables: dict, ptjsonlib: object = None, http_client: object = None,
                   use_json: bool = False, method_override: Optional[str] = None,
                   extra_headers: Optional[dict] = None, allow_redirects: Optional[bool] = None,
-                  default_allow_redirects: Optional[bool] = None) -> StepResult:
+                  default_allow_redirects: Optional[bool] = None, email_config: Optional[dict] = None) -> StepResult:
     """Run one workflow step and return the variables extracted from its result via step["regex"],
     plus (for a "send_request" step) the raw requests.Response, for callers that need to inspect
     it directly (status code, cookies, redirect history, ...) beyond what regex extraction covers.
@@ -122,6 +130,11 @@ def execute_step(step: dict, variables: dict, ptjsonlib: object = None, http_cli
                                  method_override=method_override, extra_headers=extra_headers, allow_redirects=allow_redirects,
                                  default_allow_redirects=default_allow_redirects)
         raw_text = _raw_response_text(response)
+    elif action == "get_data_from_email":
+        # No HTTP response - the "response" is the mailbox's most recent message, whose decoded
+        # text the step's regex pulls data out of (e.g. a 2FA code mailed to the user).
+        response = None
+        raw_text = get_data_from_email(email_config)
     else:
         raise ValueError(f"Unknown workflow action: {action!r}")
 
@@ -161,6 +174,127 @@ def send_request(step: dict, variables: dict, ptjsonlib: object = None, http_cli
 
     kwargs = {} if effective_redirects is None else {"allow_redirects": effective_redirects}
     return http_client.send_request(url=url, method=method_override or method, headers=headers, data=data or None, **kwargs)
+
+
+_EMAIL_DEFAULT_PORTS = {"imap": 143, "imaps": 993, "pop3": 110, "pop3s": 995}
+
+
+def get_data_from_email(email_config: Optional[dict], poll_timeout: float = 20.0,
+                        poll_interval: float = 2.0) -> str:
+    """Connect to a mailbox and return the decoded text (key headers + body) of its most recent
+    message, so a workflow regex can pull a value out of it - e.g. a 2FA code mailed to the user.
+
+    email_config is {"server": "[scheme://]host[:port]", "login": ..., "password": ...}; the
+    scheme picks the protocol and TLS (imap/imaps/pop3/pop3s, default imap) and the port defaults
+    per scheme. The mailbox is polled up to poll_timeout seconds for a message to appear (a 2FA
+    mail usually lands a moment after the request that triggered it). Returns "" if none arrived
+    in time, so a missing variable is simply absent rather than an error.
+
+    Lives in ptlibs so other tools can reuse it, and is called by the "get_data_from_email"
+    workflow action.
+    """
+    if not email_config or not email_config.get("server"):
+        raise ValueError("a 'get_data_from_email' step needs --email-server, --email-login and --email-password")
+
+    scheme, host, port = _parse_email_server(email_config["server"])
+    login = email_config.get("login")
+    password = email_config.get("password")
+
+    deadline = time.time() + poll_timeout
+    while True:
+        raw = _fetch_last_message(scheme, host, port, login, password)
+        if raw is not None:
+            return _email_to_text(raw)
+        if time.time() >= deadline:
+            return ""
+        time.sleep(poll_interval)
+
+
+def _parse_email_server(server: str) -> tuple:
+    if "://" not in server:
+        server = "imap://" + server
+    parsed = urlparse(server)
+    scheme = (parsed.scheme or "imap").lower()
+    if scheme not in _EMAIL_DEFAULT_PORTS:
+        raise ValueError(f"unsupported email scheme {scheme!r} (use imap, imaps, pop3 or pop3s)")
+    if not parsed.hostname:
+        raise ValueError(f"could not parse host from --email-server {server!r}")
+    return scheme, parsed.hostname, parsed.port or _EMAIL_DEFAULT_PORTS[scheme]
+
+
+def _fetch_last_message(scheme: str, host: str, port: int, login: str, password: str):
+    """Raw bytes of the mailbox's most recent message, or None if the mailbox is empty."""
+    if scheme.startswith("imap"):
+        return _fetch_last_imap(scheme, host, port, login, password)
+    return _fetch_last_pop3(scheme, host, port, login, password)
+
+
+def _fetch_last_imap(scheme, host, port, login, password):
+    connection = (imaplib.IMAP4_SSL if scheme == "imaps" else imaplib.IMAP4)(host, port)
+    try:
+        connection.login(login, password)
+        connection.select("INBOX")
+        _, data = connection.search(None, "ALL")
+        message_ids = data[0].split()
+        if not message_ids:
+            return None
+        _, message_data = connection.fetch(message_ids[-1], "(RFC822)")
+        for part in message_data:
+            if isinstance(part, tuple):
+                return part[1]
+        return None
+    finally:
+        try:
+            connection.logout()
+        except Exception:
+            pass
+
+
+def _fetch_last_pop3(scheme, host, port, login, password):
+    connection = (poplib.POP3_SSL if scheme == "pop3s" else poplib.POP3)(host, port, timeout=15)
+    try:
+        connection.user(login)
+        connection.pass_(password)
+        count = len(connection.list()[1])
+        if count == 0:
+            return None
+        return b"\r\n".join(connection.retr(count)[1])
+    finally:
+        try:
+            connection.quit()
+        except Exception:
+            pass
+
+
+def _email_to_text(raw: bytes) -> str:
+    """Flatten a raw RFC822 message into searchable text: a few key headers plus every decoded
+    text/plain and text/html part (MIME, charset and transfer-encoding handled)."""
+    message = email.message_from_bytes(raw)
+    parts = [f"From: {_decode_mime_header(message.get('From', ''))}",
+             f"Subject: {_decode_mime_header(message.get('Subject', ''))}",
+             ""]
+    for part in message.walk():
+        if part.get_content_type() not in ("text/plain", "text/html") or part.get_filename():
+            continue
+        payload = part.get_payload(decode=True)
+        if payload is None:
+            continue
+        charset = part.get_content_charset() or "utf-8"
+        try:
+            parts.append(payload.decode(charset, errors="replace"))
+        except LookupError:
+            parts.append(payload.decode("utf-8", errors="replace"))
+    return "\n".join(parts)
+
+
+def _decode_mime_header(value: str) -> str:
+    decoded = []
+    for text, charset in decode_header(value or ""):
+        if isinstance(text, bytes):
+            decoded.append(text.decode(charset or "utf-8", errors="replace"))
+        else:
+            decoded.append(text)
+    return "".join(decoded)
 
 
 def substitute_variables(text: str, variables: dict) -> str:
