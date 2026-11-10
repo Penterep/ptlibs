@@ -1,17 +1,81 @@
+import base64
+import binascii
 import re
-from urllib.parse import unquote, urlparse, urlunparse
+from dataclasses import dataclass
+from urllib.parse import quote_plus, unquote, urlparse, urlunparse
 
 from ptlibs.ptnethelper import is_valid_ip_address
 from ptlibs.ptpathtypedetector import PtPathTypeDetector
 
+
+@dataclass(eq=False)
+class _Param:
+    """One name=value parameter of a query string or of a request body. Compared by identity."""
+    raw: str
+    raw_name: str
+    name: str
+    value: str
+    form_type: str = None
+    required: bool = False
+
+
 class UrlParser():
     INPUT_PLACEHOLDER = "{{*}}"
-    HASH_LENGTHS = [32, 40, 56, 64, 96, 128]
+    HASH_LENGTHS = [32, 40, 64, 128]
+    FLOAT_PATTERN = r"[+-]?[0-9]*[.,][0-9]+"
+    FORM_URLENCODED = "application/x-www-form-urlencoded"
+    MULTIPART_FORM_DATA = "multipart/form-data"
+    MULTIPART_BOUNDARY = "----PenterepFormBoundary7MA4YWxkTrZu0gW"
+    GENERATED_HEADERS = {"host", "content-length", "connection"}
+
+    FORM_INPUT_TYPES = {
+        "password": "Password",
+        "email": "Email",
+        "phone": "Phone", "tel": "Phone",
+        "number": "Integer", "range": "Integer",
+        "date": "Date", "month": "Date", "week": "Date",
+        "datetime": "Datetime", "datetime-local": "Datetime", "time": "Datetime",
+        "boolean": "Boolean", "checkbox": "Boolean", "radio": "Boolean",
+        "file": "Filename",
+        "url": "Url",
+    }
+
+    NAME_INPUT_TYPES = [
+        (["email", "mail", "e-mail"], "Email"),
+        (["phone", "mobile", "telefon"], "Phone"),
+        (["id", "count", "number"], "Integer"),
+        (["file", "upload", "attachment", "filename"], "Filename"),
+        (["secret", "token", "key", "api"], "Token"),
+        (["csrf", "csrftoken", "csrf-token", "csrf_token"], "CsrfToken"),
+        (["login", "username"], "Username"),
+        (["ipaddress", "ip-address", "ip_address"], "Username"),
+        (["sid", "sessionid", "JSESSIONID", "ASP.NET_SessionId"], "SessionID"),
+        (["password", "pass"], "Password"),
+        (["is_", "has_", "bool", "enabled", "checked", "remember"], "Boolean"),
+        (["id_", "_id", "ID", "Id"], "Boolean"),
+    ]
+
+    RESPONSE_TYPES = {
+        "text/html": "Html", "application/xhtml+xml": "Html",
+        "application/json": "Json", "text/json": "Json",
+        "application/xml": "Xml", "text/xml": "Xml",
+        "application/rss+xml": "Rss", "application/atom+xml": "Rss",
+        "text/plain": "Text",
+        "text/css": "Css",
+        "application/javascript": "JavaScript", "text/javascript": "JavaScript", "application/x-javascript": "JavaScript",
+        "application/ecmascript": "JavaScript", "text/ecmascript": "JavaScript",
+        "application/pdf": "Document", "application/msword": "Document", "application/rtf": "Document", "text/csv": "Document",
+        "application/zip": "Archive", "application/gzip": "Archive", "application/x-gzip": "Archive", "application/x-tar": "Archive",
+        "application/x-7z-compressed": "Archive", "application/x-rar-compressed": "Archive", "application/vnd.rar": "Archive",
+        "application/x-bzip2": "Archive",
+        "application/octet-stream": "Binary",
+    }
+    DOCUMENT_TYPE_PREFIXES = ("application/vnd.openxmlformats-officedocument.", "application/vnd.ms-", "application/vnd.oasis.opendocument.")
 
     def __init__(self, ptjsonlib: object):
         self.ptjsonlib = ptjsonlib
 
-    def parse_url_to_nodes(self, url: str, method: str, status_code: str, data: str = None, headers: str = "", known_nodes: list = None, respect_param_values: bool = False) -> list[dict]:
+    def parse_url_to_nodes(self, url: str, method: str, status_code: str, data: str | bytes = None, headers: dict | str = None, known_nodes: list = None, respect_param_values: bool = False, content_type: str = None) -> list[dict]:
         """
         Parses the given request into webSource, action and webInput nodes and returns them as a list.
 
@@ -19,12 +83,13 @@ class UrlParser():
             url (str): The requested URL, including its query parameters.
             method (str): The HTTP method of the request.
             status_code (str): The HTTP status code of the response.
-            data (str, optional): The POST data of the request. Defaults to None.
-            headers (str, optional): The HTTP headers of the request, separated by \\r\\n. Defaults to "".
+            data (str | bytes, optional): The POST data of the request. Defaults to None.
+            headers (dict | str, optional): The HTTP headers of the request, as a dictionary or separated by \\r\\n. Defaults to None.
             known_nodes (list, optional): A list of known nodes. If provided, the function returns only nodes
                 that are not included in this list. Defaults to None.
             respect_param_values (bool, optional): If True, requests that differ only in parameter values are
                 separate actions. If False, they are considered duplicates. Defaults to False.
+            content_type (str, optional): The Content-Type of the response, returned as actionResponseType. Defaults to None.
 
         Returns:
             list[dict]: A list of node dictionaries representing the request.
@@ -38,59 +103,108 @@ class UrlParser():
         known_nodes = known_nodes or []
         source_key = self._add_source_nodes(url, new_nodes, known_nodes)
 
+        if isinstance(data, bytes):
+            data = data.decode(errors="replace")
+        data = data or None
         parsed_url = urlparse(url)
-        query_params = self._split_params(parsed_url.query)
-        data_params = self._split_params(data)
+        query_params = self._parse_params(parsed_url.query)
+        data_params = self._parse_params(data)
 
-        action_name = " ".join(filter(None, [method, "&".join(query_params + data_params)]))
-        if self._is_known_action(source_key, action_name, known_nodes, respect_param_values):
-            return new_nodes
+        def create_request(marked_param: _Param = None) -> str:
+            query = self._join_params(query_params, marked_param) if marked_param in query_params else parsed_url.query
+            body = self._join_params(data_params, marked_param) if marked_param in data_params else data
+            return self.create_request_content(method, self._get_request_path(parsed_url, query), parsed_url.netloc, headers, body)
 
-        def create_request(query: str, body: str) -> str:
-            path = urlunparse(("", "", parsed_url.path or "/", "", query, ""))
-            return self.create_request_content(method, path, parsed_url.netloc, headers, body)
-
-        action_properties = {"name": action_name, "httpMethod": method, "httpStatusCode": status_code, "httpRequest": create_request(parsed_url.query, data)}
-        action_node = self.ptjsonlib.create_node_object("action", None, source_key, action_properties)
-        new_nodes.append(action_node)
-
-        for index, param in enumerate(query_params):
-            http_request = create_request(self._mark_param(query_params, index), data)
-            new_nodes.append(self._create_input_node(param, http_request, action_node["key"]))
-        for index, param in enumerate(data_params):
-            http_request = create_request(parsed_url.query, self._mark_param(data_params, index))
-            new_nodes.append(self._create_input_node(param, http_request, action_node["key"]))
+        new_nodes.extend(self._create_action_nodes(source_key, method, status_code, content_type, query_params + data_params, create_request, known_nodes, respect_param_values))
         return new_nodes
 
 
-    def parse_url_list_to_nodes(self, urls: list[dict], headers: str = "", known_nodes: list = None, respect_param_values: bool = False) -> list[dict]:
+    def parse_form_to_nodes(self, form: dict, headers: dict | str = None, known_nodes: list = None, respect_param_values: bool = False) -> list[dict]:
         """
-        Parses a list of requests into their separate components and returns them as a list of nodes.
+        Parses the given HTML form into webSource, action and webInput nodes and returns them as a list.
 
         Args:
-            urls (list[dict]): A list of requests, each with the keys "url", "method", "statusCode" and optionally "data".
-            headers (str, optional): The HTTP headers shared by all the requests, separated by \\r\\n. Defaults to "".
-            known_nodes (list, optional): A list of known nodes. If provided, the function filters out nodes
-                that already exist in this list. Defaults to None.
+            form (dict): The form with the keys "action" (or "url"), "method", "enctype" and "parameters",
+                each parameter with the keys "name", "type", "value" and "required".
+            headers (dict | str, optional): The HTTP headers of the request, as a dictionary or separated by \\r\\n. Defaults to None.
+            known_nodes (list, optional): A list of known nodes. If provided, the function returns only nodes
+                that are not included in this list. Defaults to None.
             respect_param_values (bool, optional): If True, requests that differ only in parameter values are
                 separate actions. If False, they are considered duplicates. Defaults to False.
 
         Returns:
-            list[dict]: A list of node dictionaries representing the requests.
+            list[dict]: A list of node dictionaries representing the form.
 
         Note:
-            This function iterates through the list of requests and parses each of them using the parse_url_to_nodes
-            method. It then extends the list of known_nodes with the parsed nodes. If known_nodes is not provided, a new list is used.
+            The form is not submitted, so its action has no status code and no response type. A GET form sends its
+            parameters in the query string, which replaces the query string of the action URL like browsers do.
+            Other forms send them in the body encoded according to enctype, which is multipart/form-data or, by default,
+            application/x-www-form-urlencoded.
+        """
+
+        new_nodes = []
+        known_nodes = known_nodes or []
+        url = form.get("action") or form.get("url")
+        if not url:
+            return new_nodes
+        source_key = self._add_source_nodes(url, new_nodes, known_nodes)
+
+        method = (form.get("method") or "GET").upper()
+        parsed_url = urlparse(url)
+        form_params = [self._create_form_param(parameter) for parameter in form.get("parameters") or []]
+        if method == "GET":
+            query_params, body_params = form_params, None
+        else:
+            query_params, body_params = self._parse_params(parsed_url.query), form_params
+        is_multipart = (form.get("enctype") or "").lower().startswith(self.MULTIPART_FORM_DATA)
+
+        def create_request(marked_param: _Param = None) -> str:
+            path = self._get_request_path(parsed_url, self._join_params(query_params, marked_param))
+            if body_params is None:
+                return self.create_request_content(method, path, parsed_url.netloc, headers)
+            if is_multipart:
+                body = self._create_multipart_body(body_params, marked_param)
+                return self.create_request_content(method, path, parsed_url.netloc, headers, body, f"{self.MULTIPART_FORM_DATA}; boundary={self.MULTIPART_BOUNDARY}")
+            return self.create_request_content(method, path, parsed_url.netloc, headers, self._join_params(body_params, marked_param), self.FORM_URLENCODED)
+
+        new_nodes.extend(self._create_action_nodes(source_key, method, None, None, query_params + (body_params or []), create_request, known_nodes, respect_param_values))
+        return new_nodes
+
+
+    def parse_url_list_to_nodes(self, urls: list[dict], headers: dict | str = None, known_nodes: list = None, respect_param_values: bool = False, forms: list[dict] = None) -> list[dict]:
+        """
+        Parses a list of requests and forms into their separate components and returns them as a list of nodes.
+
+        Args:
+            urls (list[dict]): A list of requests, each with the keys "url", "method", "statusCode" and optionally
+                "data" and "contentType" (or "ContentType").
+            headers (dict | str, optional): The HTTP headers shared by all the requests, as a dictionary or separated by \\r\\n. Defaults to None.
+            known_nodes (list, optional): A list of known nodes. If provided, the function filters out nodes
+                that already exist in this list. Defaults to None.
+            respect_param_values (bool, optional): If True, requests that differ only in parameter values are
+                separate actions. If False, they are considered duplicates. Defaults to False.
+            forms (list[dict], optional): A list of HTML forms as described in parse_form_to_nodes. Defaults to None.
+
+        Returns:
+            list[dict]: A list of node dictionaries representing the requests and forms.
+
+        Note:
+            This function parses each of the requests using the parse_url_to_nodes method and then each of the forms
+            using the parse_form_to_nodes method, so a form never replaces an action that was requested. It extends
+            the list of known_nodes with the parsed nodes. If known_nodes is not provided, a new list is used.
         """
 
         known_nodes = known_nodes or []
         assert isinstance(known_nodes, list)
         for item in urls:
-            known_nodes.extend(self.parse_url_to_nodes(item["url"], item["method"], item["statusCode"], item.get("data"), headers, known_nodes, respect_param_values))
+            content_type = item.get("contentType") or item.get("ContentType")
+            known_nodes.extend(self.parse_url_to_nodes(item["url"], item["method"], item["statusCode"], item.get("data"), headers, known_nodes, respect_param_values, content_type))
+        for form in forms or []:
+            known_nodes.extend(self.parse_form_to_nodes(form, headers, known_nodes, respect_param_values))
         return known_nodes
 
 
-    def create_request_content(self, method: str, path: str, domain: str, headers: str = "", data: str = None) -> str:
+    def create_request_content(self, method: str, path: str, domain: str, headers: dict | str = None, data: str = None, content_type: str = None) -> str:
         """
         Creates the text of an HTTP request.
 
@@ -98,58 +212,85 @@ class UrlParser():
             method (str): The HTTP method of the request.
             path (str): The path of the request, including its query parameters.
             domain (str): The value of the Host header.
-            headers (str, optional): The HTTP headers of the request, separated by \\r\\n. Defaults to "".
-            data (str, optional): The POST data of the request. Defaults to None.
+            headers (dict | str, optional): The HTTP headers of the request, as a dictionary or separated by \\r\\n. Defaults to None.
+            data (str, optional): The body of the request. Defaults to None.
+            content_type (str, optional): The Content-Type of the body, which replaces the one in headers.
+                If neither is given, application/x-www-form-urlencoded is used. Defaults to None.
 
         Returns:
             str: The text of the HTTP request.
+
+        Note:
+            Host, Content-Length and Connection are always generated, so they are left out of the given headers.
         """
+
+        skipped_headers = self.GENERATED_HEADERS | ({"content-type"} if content_type else set())
+        header_lines = [line for line in self._get_header_lines(headers) if self._get_header_name(line) not in skipped_headers]
 
         request_content = f"{method} {path} HTTP/1.1\r\n"
         request_content += f"Host: {domain}\r\n"
-        if headers:
-            request_content += f"{headers}\r\n"
-        if data:
-            if "content-type:" not in headers.lower():
-                request_content += "Content-Type: application/x-www-form-urlencoded\r\n"
+        request_content += "".join(f"{line}\r\n" for line in header_lines)
+        if data is not None:
+            if content_type or "content-type" not in [self._get_header_name(line) for line in header_lines]:
+                request_content += f"Content-Type: {content_type or self.FORM_URLENCODED}\r\n"
             request_content += f"Content-Length: {len(data.encode())}\r\n"
         request_content += "Connection: close\r\n\r\n"
-        if data:
+        if data is not None:
             request_content += data
         return request_content
 
 
-    def get_input_type(self, value: str) -> str:
+    def get_input_type(self, value: str, name: str = None, form_type: str = None) -> str:
         """
-        Determines the data type of the given parameter value.
+        Determines the input type of a parameter.
 
         Args:
             value (str): The URL decoded parameter value.
+            name (str, optional): The URL decoded parameter name. Defaults to None.
+            form_type (str, optional): The input type passed with a form. Defaults to None.
 
         Returns:
-            str: One of hash, ip, phone, integer, float, url, email, filename or string.
+            str: One of Boolean, Integer, Float, String, Password, Email, Username, Token, Hash, Encrypt, CsrfToken,
+                Phone, Date, Datetime, SessionID, Ip, Url or Filename.
 
         Note:
-            The order of the checks matters, e.g. +420777123456 would also pass as an integer.
+            The input type passed with a form is used first, then the type of the value. String values
+            are further distinguished by the name of the parameter.
         """
 
-        if len(value) in self.HASH_LENGTHS and re.fullmatch(r"[0-9a-fA-F]+", value):
-            return "hash"
-        if is_valid_ip_address(value):
-            return "ip"
-        if self._is_phone(value):
-            return "phone"
-        if re.fullmatch(r"[+-]?[0-9]+", value):
-            return "integer"
-        if re.fullmatch(r"[+-]?[0-9]*[.,][0-9]+", value):
-            return "float"
-        if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9+.\-]*://\S+|//\S+|www\.\S+", value):
-            return "url"
-        if re.fullmatch(r"[^@\s:/]+@[^@\s:/]+\.[^@\s:/.]+", value):
-            return "email"
-        if self._is_filename(value):
-            return "filename"
-        return "string"
+        input_type = self._get_input_type_by_form_type(form_type, value) or self._get_input_type_by_value(value)
+        if input_type == "String" and name:
+            return self._get_input_type_by_name(name)
+        return input_type
+
+
+    def get_response_type(self, content_type: str) -> str | None:
+        """
+        Converts the Content-Type of a response to actionResponseType.
+
+        Args:
+            content_type (str): The Content-Type of the response, e.g. "text/html; charset=utf-8".
+
+        Returns:
+            str | None: The actionResponseType, e.g. actionResponseTypeHtml, or None if no content type is given.
+        """
+
+        mime_type = (content_type or "").split(";")[0].strip().lower()
+        if not mime_type:
+            return None
+        suffix = self.RESPONSE_TYPES.get(mime_type)
+        if not suffix:
+            if mime_type.startswith("image/"):
+                suffix = "Image"
+            elif mime_type.startswith(self.DOCUMENT_TYPE_PREFIXES):
+                suffix = "Document"
+            elif mime_type.endswith("+json"):
+                suffix = "Json"
+            elif mime_type.endswith("+xml"):
+                suffix = "Xml"
+            else:
+                suffix = "Other"
+        return f"actionResponseType{suffix}"
 
 
     def get_base_url(self, url: str) -> str:
@@ -180,11 +321,30 @@ class UrlParser():
             return node_object["key"]
         return node_object
 
-    def _create_input_node(self, param: str, http_request: str, parent: str) -> dict:
-        """Creates webInput node from the given name=value parameter"""
-        name, _, value = param.partition("=")
-        properties = {"name": unquote(name), "inputType": self.get_input_type(unquote(value)), "httpRequest": http_request}
-        return self.ptjsonlib.create_node_object("webInput", None, parent, properties)
+    def _create_action_nodes(self, source_key: str, method: str, status_code: str, content_type: str, params: list[_Param], create_request, known_nodes: list, respect_param_values: bool) -> list[dict]:
+        """Returns the action node and its webInput nodes, or nothing if the source already has the action. create_request(param) marks the param."""
+        action_name = " ".join(filter(None, [method, "&".join(param.raw for param in params)]))
+        if self._is_known_action(source_key, action_name, known_nodes, respect_param_values):
+            return []
+
+        action_properties = {
+            "name": action_name,
+            "httpMethod": method,
+            "httpStatusCode": None if status_code is None else str(status_code),
+            "actionResponseType": self.get_response_type(content_type),
+            "httpRequest": create_request(),
+        }
+        action_node = self.ptjsonlib.create_node_object("action", None, source_key, action_properties)
+        nodes = [action_node]
+        for param in params:
+            input_properties = {
+                "name": param.name,
+                "inputType": self.get_input_type(param.value, param.name, param.form_type),
+                "required": param.required,
+                "httpRequest": create_request(param),
+            }
+            nodes.append(self.ptjsonlib.create_node_object("webInput", None, action_node["key"], input_properties))
+        return nodes
 
     def _is_known_action(self, source_key: str, action_name: str, known_nodes: list, respect_param_values: bool) -> bool:
         """Returns True if the source already has this action. Checked here because node_duplicity_check ignores the parent."""
@@ -207,11 +367,95 @@ class UrlParser():
         """Returns the name=value parts of the given query or POST data"""
         return [param for param in (params or "").split("&") if param]
 
-    def _mark_param(self, params: list[str], index: int) -> str:
-        """Returns the parameters joined back together with the value at the given index replaced by the placeholder"""
-        marked_params = params.copy()
-        marked_params[index] = f"{params[index].partition('=')[0]}={self.INPUT_PLACEHOLDER}"
-        return "&".join(marked_params)
+    def _parse_params(self, params: str) -> list[_Param]:
+        """Returns the parameters of the given query or urlencoded POST data"""
+        parsed_params = []
+        for raw in self._split_params(params):
+            raw_name, _, raw_value = raw.partition("=")
+            parsed_params.append(_Param(raw, raw_name, unquote(raw_name), unquote(raw_value)))
+        return parsed_params
+
+    def _create_form_param(self, parameter: dict) -> _Param:
+        """Returns the parameter of the given form field"""
+        name = str(parameter.get("name") or "")
+        value = parameter.get("value")
+        value = "" if value is None else str(value)
+        raw_name = quote_plus(name)
+        return _Param(f"{raw_name}={quote_plus(value)}", raw_name, name, value, parameter.get("type"), bool(parameter.get("required")))
+
+    def _join_params(self, params: list[_Param], marked_param: _Param = None) -> str:
+        """Returns the parameters joined back together, with the value of marked_param replaced by the placeholder"""
+        return "&".join(f"{param.raw_name}={self.INPUT_PLACEHOLDER}" if param is marked_param else param.raw for param in params)
+
+    def _create_multipart_body(self, params: list[_Param], marked_param: _Param = None) -> str:
+        """Returns the multipart/form-data body of the parameters, with the value (or file name) of marked_param replaced by the placeholder"""
+        body = ""
+        for param in params:
+            value = self.INPUT_PLACEHOLDER if param is marked_param else param.value
+            body += f"--{self.MULTIPART_BOUNDARY}\r\n"
+            if (param.form_type or "").lower() == "file":
+                body += f'Content-Disposition: form-data; name="{self._escape_multipart(param.name)}"; filename="{self._escape_multipart(value)}"\r\n'
+                body += "Content-Type: application/octet-stream\r\n\r\n\r\n"
+            else:
+                body += f'Content-Disposition: form-data; name="{self._escape_multipart(param.name)}"\r\n\r\n{value}\r\n'
+        return body + f"--{self.MULTIPART_BOUNDARY}--\r\n"
+
+    def _escape_multipart(self, text: str) -> str:
+        """Escapes a name or file name in Content-Disposition like browsers do"""
+        return text.replace("\r", "%0D").replace("\n", "%0A").replace('"', "%22")
+
+    def _get_request_path(self, parsed_url, query: str) -> str:
+        """Returns the path of the parsed url with the given query string"""
+        return urlunparse(("", "", parsed_url.path or "/", "", query, ""))
+
+    def _get_header_lines(self, headers: dict | str) -> list[str]:
+        """Returns the given headers as a list of "Name: value" lines"""
+        if not headers:
+            return []
+        if isinstance(headers, str):
+            return [line for line in headers.splitlines() if line.strip()]
+        return [f"{name}: {value}" for name, value in headers.items()]
+
+    def _get_header_name(self, header_line: str) -> str:
+        """Returns the lowercase name of the given header line"""
+        return header_line.partition(":")[0].strip().lower()
+
+    def _get_input_type_by_form_type(self, form_type: str, value: str) -> str | None:
+        """Returns the input type of the form field type, or None if the field type does not tell (e.g. string, hidden or select)"""
+        input_type = self.FORM_INPUT_TYPES.get((form_type or "").lower())
+        if input_type == "Integer" and re.fullmatch(self.FLOAT_PATTERN, value):
+            return "Float"
+        return input_type
+
+    def _get_input_type_by_value(self, value: str) -> str:
+        """Returns the input type of the value. The order of the checks matters, e.g. +420777123456 would also pass as an integer."""
+        if len(value) in self.HASH_LENGTHS and re.fullmatch(r"[0-9a-fA-F]+", value):
+            return "Hash"
+        if is_valid_ip_address(value):
+            return "Ip"
+        if self._is_phone(value):
+            return "Phone"
+        if re.fullmatch(r"[+-]?[0-9]+", value):
+            return "Integer"
+        if re.fullmatch(self.FLOAT_PATTERN, value):
+            return "Float"
+        if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9+.\-]*://\S+|//\S+|www\.\S+", value):
+            return "Url"
+        if re.fullmatch(r"[^@\s:/]+@[^@\s:/]+\.[^@\s:/.]+", value):
+            return "Email"
+        if self._is_filename(value):
+            return "Filename"
+        if self._is_base64(value):
+            return "Encrypt"
+        return "String"
+
+    def _get_input_type_by_name(self, name: str) -> str:
+        """Returns the input type of a string parameter by its name"""
+        name = name.lower()
+        for keywords, input_type in self.NAME_INPUT_TYPES:
+            if any(keyword.lower() in name for keyword in keywords):
+                return input_type
+        return "String"
 
     def _is_phone(self, value: str) -> bool:
         """Returns True for 9-15 digits with an international prefix (+, 00) or with separators"""
@@ -227,3 +471,13 @@ class UrlParser():
         if name.endswith(".com"):
             return False
         return PtPathTypeDetector().get_type(name) not in ("webSourceTypeDirectory", "webSourceTypeOther")
+
+    def _is_base64(self, value: str) -> bool:
+        """Returns True if the non-empty value can be decoded as base64"""
+        if not value:
+            return False
+        try:
+            base64.b64decode(value, validate=True)
+            return True
+        except (binascii.Error, ValueError):
+            return False
