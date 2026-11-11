@@ -17,6 +17,7 @@ class _Param:
     value: str
     form_type: str = None
     required: bool = False
+    default_type: str = "String"
 
 
 class UrlParser():
@@ -27,6 +28,7 @@ class UrlParser():
     MULTIPART_FORM_DATA = "multipart/form-data"
     MULTIPART_BOUNDARY = "----PenterepFormBoundary7MA4YWxkTrZu0gW"
     GENERATED_HEADERS = {"host", "content-length", "connection"}
+    BOOLEAN_VALUES = {"on", "off", "true", "false", "enable", "disable"}
 
     FORM_INPUT_TYPES = {
         "password": "Password",
@@ -43,6 +45,7 @@ class UrlParser():
     NAME_INPUT_TYPES = [
         (["email", "mail", "e-mail"], "Email"),
         (["phone", "mobile", "telefon"], "Phone"),
+        (["guid"], "Guid"),
         (["id", "count", "number"], "Integer"),
         (["file", "upload", "attachment", "filename"], "Filename"),
         (["secret", "token", "key", "api"], "Token"),
@@ -53,6 +56,10 @@ class UrlParser():
         (["password", "pass"], "Password"),
         (["is_", "has_", "bool", "enabled", "checked", "remember"], "Boolean"),
         (["id_", "_id", "ID", "Id"], "Boolean"),
+        (["str", "string", "query"], "String"),
+        (["hash"], "Hash"),
+        (["ticket"], "Token"),
+        (["referer", "referrer", "url", "path", "backurl", "returnurl"], "Path"),
     ]
 
     RESPONSE_TYPES = {
@@ -97,6 +104,7 @@ class UrlParser():
         Note:
             Every part of the URL becomes a webSource node, but only the requested one gets an action node,
             as nothing is known about the response of the others. Every parameter of the action becomes a webInput node.
+            An empty query parameter whose name does not tell its type has no inputType.
         """
 
         new_nodes = []
@@ -108,7 +116,7 @@ class UrlParser():
         data = data or None
         parsed_url = urlparse(url)
         query_params = self._parse_params(parsed_url.query)
-        data_params = self._parse_params(data)
+        data_params = self._parse_params(data, "String")
 
         def create_request(marked_param: _Param = None) -> str:
             query = self._join_params(query_params, marked_param) if marked_param in query_params else parsed_url.query
@@ -240,7 +248,7 @@ class UrlParser():
         return request_content
 
 
-    def get_input_type(self, value: str, name: str = None, form_type: str = None) -> str:
+    def get_input_type(self, value: str, name: str = None, form_type: str = None, default: str = "String") -> str | None:
         """
         Determines the input type of a parameter.
 
@@ -248,20 +256,21 @@ class UrlParser():
             value (str): The URL decoded parameter value.
             name (str, optional): The URL decoded parameter name. Defaults to None.
             form_type (str, optional): The input type passed with a form. Defaults to None.
+            default (str, optional): The input type of an empty value that neither the form type nor the name determines. Defaults to "String".
 
         Returns:
-            str: One of Boolean, Integer, Float, String, Password, Email, Username, Token, Hash, Encrypt, CsrfToken,
-                Phone, Date, Datetime, SessionID, Ip, Url or Filename.
+            str | None: One of Boolean, Integer, Float, String, Password, Email, Username, Token, Hash, Encrypt, CsrfToken,
+                Phone, Date, Datetime, SessionID, Ip, Url, Filename, Guid or Path, or the default.
 
         Note:
-            The input type passed with a form is used first, then the type of the value. String values
+            The input type passed with a form is used first, then the type of the value. String and empty values
             are further distinguished by the name of the parameter.
         """
 
         input_type = self._get_input_type_by_form_type(form_type, value) or self._get_input_type_by_value(value)
-        if input_type == "String" and name:
-            return self._get_input_type_by_name(name)
-        return input_type
+        if input_type in (None, "String") and name:
+            input_type = self._get_input_type_by_name(name) or input_type
+        return input_type or default
 
 
     def get_response_type(self, content_type: str) -> str | None:
@@ -339,7 +348,7 @@ class UrlParser():
         for param in params:
             input_properties = {
                 "name": param.name,
-                "inputType": self.get_input_type(param.value, param.name, param.form_type),
+                "inputType": self.get_input_type(param.value, param.name, param.form_type, param.default_type),
                 "required": param.required,
                 "httpRequest": create_request(param),
             }
@@ -367,12 +376,12 @@ class UrlParser():
         """Returns the name=value parts of the given query or POST data"""
         return [param for param in (params or "").split("&") if param]
 
-    def _parse_params(self, params: str) -> list[_Param]:
-        """Returns the parameters of the given query or urlencoded POST data"""
+    def _parse_params(self, params: str, default_type: str = None) -> list[_Param]:
+        """Returns the parameters of the given query or urlencoded POST data, typed as default_type when nothing else tells"""
         parsed_params = []
         for raw in self._split_params(params):
             raw_name, _, raw_value = raw.partition("=")
-            parsed_params.append(_Param(raw, raw_name, unquote(raw_name), unquote(raw_value)))
+            parsed_params.append(_Param(raw, raw_name, unquote(raw_name), unquote(raw_value), default_type=default_type))
         return parsed_params
 
     def _create_form_param(self, parameter: dict) -> _Param:
@@ -427,8 +436,12 @@ class UrlParser():
             return "Float"
         return input_type
 
-    def _get_input_type_by_value(self, value: str) -> str:
-        """Returns the input type of the value. The order of the checks matters, e.g. +420777123456 would also pass as an integer."""
+    def _get_input_type_by_value(self, value: str) -> str | None:
+        """Returns the input type of the value, or None for an empty value. The order of the checks matters, e.g. +420777123456 would also pass as an integer."""
+        if not value:
+            return None
+        if value.lower() in self.BOOLEAN_VALUES:
+            return "Boolean"
         if len(value) in self.HASH_LENGTHS and re.fullmatch(r"[0-9a-fA-F]+", value):
             return "Hash"
         if is_valid_ip_address(value):
@@ -449,13 +462,13 @@ class UrlParser():
             return "Encrypt"
         return "String"
 
-    def _get_input_type_by_name(self, name: str) -> str:
-        """Returns the input type of a string parameter by its name"""
+    def _get_input_type_by_name(self, name: str) -> str | None:
+        """Returns the input type of a parameter by its name, or None if the name does not tell"""
         name = name.lower()
         for keywords, input_type in self.NAME_INPUT_TYPES:
             if any(keyword.lower() in name for keyword in keywords):
                 return input_type
-        return "String"
+        return None
 
     def _is_phone(self, value: str) -> bool:
         """Returns True for 9-15 digits with an international prefix (+, 00) or with separators"""
