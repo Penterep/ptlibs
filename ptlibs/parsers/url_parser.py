@@ -1,8 +1,10 @@
 import base64
 import binascii
+import json
 import re
 from dataclasses import dataclass
 from urllib.parse import quote_plus, unquote, urlparse, urlunparse
+from xml.etree import ElementTree
 
 from ptlibs.ptnethelper import is_valid_ip_address
 from ptlibs.ptpathtypedetector import PtPathTypeDetector
@@ -29,6 +31,8 @@ class UrlParser():
     MULTIPART_BOUNDARY = "----PenterepFormBoundary7MA4YWxkTrZu0gW"
     GENERATED_HEADERS = {"host", "content-length", "connection"}
     BOOLEAN_VALUES = {"on", "off", "true", "false", "enable", "disable"}
+    PHP_SERIALIZED_PATTERN = r'N;|b:[01];|i:-?\d+;|d:-?(?:\d+(?:\.\d+)?(?:E[+-]?\d+)?|INF|NAN);|s:\d+:".*";|a:\d+:\{.*\}|[OC]:\d+:"[^"]+":\d+:\{.*\}'
+    SERIALIZED_SIGNATURES = (b"\xac\xed\x00\x05", b"\x00\x01\x00\x00\x00\xff\xff\xff\xff", b"\xff\x01", b"\x80\x02", b"\x80\x03", b"\x80\x04", b"\x80\x05")
 
     FORM_INPUT_TYPES = {
         "password": "Password",
@@ -36,13 +40,15 @@ class UrlParser():
         "phone": "Phone", "tel": "Phone",
         "number": "Integer", "range": "Integer",
         "date": "Date", "month": "Date", "week": "Date",
-        "datetime": "Datetime", "datetime-local": "Datetime", "time": "Datetime",
+        "datetime": "Datetime", "datetime-local": "Datetime",
+        "time": "Time",
         "boolean": "Boolean", "checkbox": "Boolean", "radio": "Boolean",
         "file": "Filename",
         "url": "Url",
     }
 
     NAME_INPUT_TYPES = [
+        (["captcha"], "Captcha"),
         (["email", "mail", "e-mail"], "Email"),
         (["phone", "mobile", "telefon"], "Phone"),
         (["guid"], "Guid"),
@@ -52,7 +58,7 @@ class UrlParser():
         (["csrf", "csrftoken", "csrf-token", "csrf_token"], "CsrfToken"),
         (["login", "username"], "Username"),
         (["ipaddress", "ip-address", "ip_address"], "Username"),
-        (["sid", "sessionid", "JSESSIONID", "ASP.NET_SessionId"], "SessionID"),
+        (["sid", "sessionid", "JSESSIONID", "ASP.NET_SessionId"], "SessionId"),
         (["password", "pass"], "Password"),
         (["is_", "has_", "bool", "enabled", "checked", "remember"], "Boolean"),
         (["id_", "_id", "ID", "Id"], "Boolean"),
@@ -96,7 +102,7 @@ class UrlParser():
                 that are not included in this list. Defaults to None.
             respect_param_values (bool, optional): If True, requests that differ only in parameter values are
                 separate actions. If False, they are considered duplicates. Defaults to False.
-            content_type (str, optional): The Content-Type of the response, returned as actionResponseType. Defaults to None.
+            content_type (str, optional): The Content-Type of the response, returned as webActionResponseType. Defaults to None.
 
         Returns:
             list[dict]: A list of node dictionaries representing the request.
@@ -104,7 +110,7 @@ class UrlParser():
         Note:
             Every part of the URL becomes a webSource node, but only the requested one gets an action node,
             as nothing is known about the response of the others. Every parameter of the action becomes a webInput node.
-            An empty query parameter whose name does not tell its type has no inputType.
+            An empty query parameter whose name does not tell its type has no webInputType.
         """
 
         new_nodes = []
@@ -256,11 +262,13 @@ class UrlParser():
             value (str): The URL decoded parameter value.
             name (str, optional): The URL decoded parameter name. Defaults to None.
             form_type (str, optional): The input type passed with a form. Defaults to None.
-            default (str, optional): The input type of an empty value that neither the form type nor the name determines. Defaults to "String".
+            default (str, optional): The input type (without the webInputType prefix) of an empty value that neither
+                the form type nor the name determines. Defaults to "String".
 
         Returns:
-            str | None: One of Boolean, Integer, Float, String, Password, Email, Username, Token, Hash, Encrypt, CsrfToken,
-                Phone, Date, Datetime, SessionID, Ip, Url, Filename, Guid or Path, or the default.
+            str | None: The webInputType code, i.e. webInputType followed by one of Boolean, Integer, Float, String, Password,
+                Email, Username, Token, Hash, Crypted, CsrfToken, Phone, Date, Datetime, Time, SessionId, IpAddress, Url,
+                Filename, Guid, Path, Json, Array, Xml, SerializedData or Captcha, or None if the default is None.
 
         Note:
             The input type passed with a form is used first, then the type of the value. String and empty values
@@ -270,18 +278,19 @@ class UrlParser():
         input_type = self._get_input_type_by_form_type(form_type, value) or self._get_input_type_by_value(value)
         if input_type in (None, "String") and name:
             input_type = self._get_input_type_by_name(name) or input_type
-        return input_type or default
+        input_type = input_type or default
+        return f"webInputType{input_type}" if input_type else None
 
 
     def get_response_type(self, content_type: str) -> str | None:
         """
-        Converts the Content-Type of a response to actionResponseType.
+        Converts the Content-Type of a response to webActionResponseType.
 
         Args:
             content_type (str): The Content-Type of the response, e.g. "text/html; charset=utf-8".
 
         Returns:
-            str | None: The actionResponseType, e.g. actionResponseTypeHtml, or None if no content type is given.
+            str | None: The webActionResponseType, e.g. webActionResponseTypeHtml, or None if no content type is given.
         """
 
         mime_type = (content_type or "").split(";")[0].strip().lower()
@@ -299,7 +308,7 @@ class UrlParser():
                 suffix = "Xml"
             else:
                 suffix = "Other"
-        return f"actionResponseType{suffix}"
+        return f"webActionResponseType{suffix}"
 
 
     def get_base_url(self, url: str) -> str:
@@ -338,19 +347,19 @@ class UrlParser():
 
         action_properties = {
             "name": action_name,
-            "httpMethod": method,
-            "httpStatusCode": None if status_code is None else str(status_code),
-            "actionResponseType": self.get_response_type(content_type),
-            "httpRequest": create_request(),
+            "webHttpMethod": f"webHttpMethod{method.capitalize()}",
+            "webActionStatusCode": None if status_code is None else f"webActionStatusCode{status_code}",
+            "webActionResponseType": self.get_response_type(content_type),
+            "webActionRequest": create_request(),
         }
-        action_node = self.ptjsonlib.create_node_object("action", None, source_key, action_properties)
+        action_node = self.ptjsonlib.create_node_object("webPageAction", None, source_key, action_properties)
         nodes = [action_node]
         for param in params:
             input_properties = {
                 "name": param.name,
-                "inputType": self.get_input_type(param.value, param.name, param.form_type, param.default_type),
-                "required": param.required,
-                "httpRequest": create_request(param),
+                "webInputType": self.get_input_type(param.value, param.name, param.form_type, param.default_type),
+                "is_required": param.required,
+                "webActionRequest": create_request(param),
             }
             nodes.append(self.ptjsonlib.create_node_object("webInput", None, action_node["key"], input_properties))
         return nodes
@@ -359,7 +368,7 @@ class UrlParser():
         """Returns True if the source already has this action. Checked here because node_duplicity_check ignores the parent."""
         action_id = self._get_action_id(action_name, respect_param_values)
         for node in known_nodes:
-            if node["type"] == "action" and node["parent"] == source_key:
+            if node["type"] == "webPageAction" and node["parent"] == source_key:
                 if self._get_action_id(node["properties"]["name"], respect_param_values) == action_id:
                     return True
         return False
@@ -442,10 +451,17 @@ class UrlParser():
             return None
         if value.lower() in self.BOOLEAN_VALUES:
             return "Boolean"
+        json_type = self._get_json_type(value)
+        if json_type:
+            return json_type
+        if self._is_xml(value):
+            return "Xml"
+        if self._is_serialized(value):
+            return "SerializedData"
         if len(value) in self.HASH_LENGTHS and re.fullmatch(r"[0-9a-fA-F]+", value):
             return "Hash"
         if is_valid_ip_address(value):
-            return "Ip"
+            return "IpAddress"
         if self._is_phone(value):
             return "Phone"
         if re.fullmatch(r"[+-]?[0-9]+", value):
@@ -458,8 +474,8 @@ class UrlParser():
             return "Email"
         if self._is_filename(value):
             return "Filename"
-        if self._is_base64(value):
-            return "Encrypt"
+        if self._decode_base64(value) is not None:
+            return "Crypted"
         return "String"
 
     def _get_input_type_by_name(self, name: str) -> str | None:
@@ -485,12 +501,48 @@ class UrlParser():
             return False
         return PtPathTypeDetector().get_type(name) not in ("webSourceTypeDirectory", "webSourceTypeOther")
 
-    def _is_base64(self, value: str) -> bool:
-        """Returns True if the non-empty value can be decoded as base64"""
-        if not value:
-            return False
+    def _get_json_type(self, value: str) -> str | None:
+        """Returns Json for a JSON object, Array for a JSON array, or None"""
+        if not value.lstrip().startswith(("{", "[")):
+            return None
         try:
-            base64.b64decode(value, validate=True)
-            return True
-        except (binascii.Error, ValueError):
+            data = json.loads(value)
+        except (ValueError, RecursionError):
+            return None
+        if isinstance(data, dict):
+            return "Json"
+        if isinstance(data, list):
+            return "Array"
+        return None
+
+    def _is_xml(self, value: str) -> bool:
+        """Returns True for a well-formed XML element. Values with a DOCTYPE or an ENTITY declaration are XML, but are not parsed."""
+        value = value.strip()
+        if not (value.startswith("<") and value.endswith(">")):
             return False
+        if re.search(r"<!(?:DOCTYPE|ENTITY)", value, re.IGNORECASE):
+            return True
+        try:
+            ElementTree.fromstring(value)
+            return True
+        except (ElementTree.ParseError, ValueError):
+            return False
+
+    def _is_serialized(self, value: str) -> bool:
+        """Returns True for PHP serialized data, or for Java, .NET (including ViewState) or Python pickle serialized data in hex or base64"""
+        if re.fullmatch(self.PHP_SERIALIZED_PATTERN, value, re.DOTALL):
+            return True
+        if len(value) % 2 == 0 and re.fullmatch(r"[0-9a-fA-F]+", value):
+            data = bytes.fromhex(value)
+        else:
+            data = self._decode_base64(value)
+        return bool(data) and data.startswith(self.SERIALIZED_SIGNATURES)
+
+    def _decode_base64(self, value: str) -> bytes | None:
+        """Returns the decoded non-empty base64 value, or None if it is empty or cannot be decoded as base64"""
+        if not value:
+            return None
+        try:
+            return base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError):
+            return None
