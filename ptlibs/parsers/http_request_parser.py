@@ -142,13 +142,13 @@ class HttpRequestParser():
         try:
             http_request_str = self._load_and_validate_http_request(http_request)
             # Get method, path, and HTTP version from the first line
-            first_line = http_request.split("\n")[0]
+            first_line = http_request_str.split("\n")[0]
             parts = first_line.split()
             method, path, self.HTTP_VERSION = parts[0], parts[1], parts[2]
 
             # Get headers and request data
-            headers = dict(self.get_request_headers(http_request))
-            request_data = self.get_request_data(http_request)
+            headers = dict(self.get_request_headers(http_request_str))
+            request_data = self.get_request_data(http_request_str)
             # Set host from headers
             self._host = headers.get("Host")  # Set host based on the Host header
             # Check if host is set
@@ -400,6 +400,7 @@ class HttpRequestParser():
             raise TypeError("http_request must be a string or a file handler.")
 
         #print("BEFORE:", request)
+        request = request.replace("\r\n", "\n")
         self._validate_http_request(request)
         return request
 
